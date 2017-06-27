@@ -1,0 +1,14 @@
+---
+title: "USRDS2015 Project Notebook"
+author: Abhijit Dasgupta
+output: html_notebook
+---
+
+# Background
+
+I will be re-factoring the original USRDS project to make it simpler and more efficient to use in 
+R. The main improvements planned are:
+
+1. Incorporating data into SQLite and MonetDB databases for easier data munging
+2. Improving computation by incorporating more recent developments in competing risks modeling
+3. 
