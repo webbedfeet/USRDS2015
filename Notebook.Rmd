@@ -11,4 +11,10 @@ R. The main improvements planned are:
 
 1. Incorporating data into SQLite and MonetDB databases for easier data munging
 2. Improving computation by incorporating more recent developments in competing risks modeling
-3. 
+
+# Updates
+
+### June 27, 2017
+I created a script (`data/verifyPaths.r`) that automatically captures the database directory from 
+the external disk label. The databases are on one of two external HDs. Backups of the raw data are on the P: drive. 
+
