@@ -12,12 +12,11 @@
 #' @export
 reload <- function(d = file.path(getwd(),'lib')){
   source(file.path(d,'packages.R'))
-  if('fn' %in% search()) detach('fn')
+  if ('fn' %in% search()) detach('fn')
   fn <- new.env()
-  source(file.path(d, 'packages.R')) # Always load packages first
-  for(f in dir(file.path(d,'R'), pattern='.R')){
+  for (f in dir(file.path(d,'R'), pattern = '[.R]')){
     print(paste('Loading',f))
-    source(file.path(d,'R',f), local=fn)
+    source(file.path(d,'R',f), local = fn)
   }
   attach(fn)    
 }
