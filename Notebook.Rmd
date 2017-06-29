@@ -1,6 +1,8 @@
 ---
-title: "USRDS2015 Project Notebook"
+title: "USRDS2015: Refactoring of USRDS"
+subtitle: "Project Notebook"
 author: Abhijit Dasgupta
+date: "Last updated `r format(Sys.Date(), '%B %d, %Y')`"
 output: html_notebook
 ---
 
@@ -11,4 +13,17 @@ R. The main improvements planned are:
 
 1. Incorporating data into SQLite and MonetDB databases for easier data munging
 2. Improving computation by incorporating more recent developments in competing risks modeling
-3. 
+
+# Software
+
+I'm putting all the datasets in on-disk SQL-based storage, using 
+SQLite and MonetDB. The latter is a bit more finicky to set up but 
+is quite a bit quicker for the datasets. MonetDB is installed and used 
+through the `MonetDBLite` R package. SQLite is installed and used through the `RSQLite` R package. 
+
+There may be value to doing data manipulation in Spark, even on a local Spark instance, given the sizes of the data sets. The rate-limiting 
+factor may be copying the data sets into Spark. However, the munging and descriptives might be much faster. 
+
+The current plan (6/29/17) is to do select and join functions in the SQL
+databases, import those into R, and then do mutate and distinct operations. These can possibly be exported into Spark with much lower 
+overhead on memory operationally.
