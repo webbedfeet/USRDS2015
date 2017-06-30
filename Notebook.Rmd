@@ -18,3 +18,7 @@ R. The main improvements planned are:
 I created a function (`verifyPaths`) that automatically captures the database directory from 
 the external disk label. The databases are on one of two external HDs. Backups of the raw data are on the P: drive. 
 
+The main thing I want to do with the data munging is to have all the select and filter and join
+work happen in the databases, then import a reduced dataset for mutates and removing duplicates
+in R. 
+
