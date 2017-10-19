@@ -35,3 +35,15 @@ overhead on memory operationally.
 I created a function (`verifyPaths`) that automatically captures the database directory from 
 the external disk label. The databases are on one of two external HDs. Backups of the raw data are on the P: drive. 
 
+### October 18, 2017
+I added to `verifyPaths` to include my laptop. 
+
+We're looking at incident comorbidities from the 2015 hospitalization data. For this
+we're extracting IDs for people with these comorbidities in the hospital files. Then
+we will verify that these are incident cases by removing individuals who also had the 
+same ICD9 codes in their medevid file. 
+
+We also decided to extend the analysis to 2015 for completeness, working with the 
+1,131,409 individuals we did for the 2014 analysis and not adding new individuals.
+The data for the first analysis is in the `AnalyticData` table in the 2014 SQLite 
+database
