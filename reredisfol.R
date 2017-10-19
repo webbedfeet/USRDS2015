@@ -9,17 +9,16 @@ sql_conn <- src_sqlite(file.path(dbdir,'USRDS.sqlite3'))
 # mdb_conn <- src_monetdblite(dbdir)
 # # conn1 <- dbConnect(MonetDBLite(), dbdir)
 
+sql_2014 <- src_sqlite(file.path(datadir2014,'ALL Files', 'PR_db'))
+study_tbl <- tbl(sql_2014, 'AnalyticData')
+withdrew <- study_tbl %>% select(USRDS_ID, cens_type) %>% filter(cens_type==3) %>% collect()
+
 deaths_db = tbl(sql_conn, 'death')
 deaths_db %>% count(REREDISFOL) -> discontinue_summary
 
 bl <- deaths_db %>% select(USRDS_ID, REREDISFOL) %>% collect()
-ids = read_csv('data/raw/ids2014.csv')
-bl <- bl %>% filter(USRDS_ID %in% ids$USRDS_ID)
-summ <- bl %>% count(REREDISFOL)
-summ[1,1] = 'Unavailable'
-x <-  tibble(REREDISFOL = 'Unavailable-not in DEATH', n = nrow(ids)-nrow(bl))
-bl <- rbind(summ, x) %>% arrange(REREDISFOL)
+withdrew <- withdrew %>% left_join(bl)
 
-bl <- bl %>% mutate(Percent = round(n/sum(n)*100,2), 
-                    "Cumulative percent" = round(cumsum(n)/sum(n)*100,2))
+withdrew %>% count(REREDISFOL) %>% 
+  
 
