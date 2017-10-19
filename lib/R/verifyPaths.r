@@ -24,4 +24,13 @@ verifyPaths <- function() {
     }
     return(dbdir)
   }
+  if(Sys.info()['sysname']=='Darwin'){ # Macbook
+    a <- dir('/Volumes')
+    if(!any(str_detect(a, 'ARAASTAT'))){
+      print('No access to database')
+      return(NA)
+    }
+    dbdir = file.path('/Volumes','ARAASTAT','NIAMS','Ward','USRDS','Data','2015 Data')
+    return(dbdir)
+  }
 }
