@@ -64,8 +64,67 @@ head(MetsCa)
 # till2009 %>% select(USRDS_ID, starts_with('HSDIAG')) %>% show_query()
 # from2010 %>% select(USRDS_ID, starts_with("HSDIAG")) %>% show_query()
 
-dementia <- read_csv('data/Dementia.csv')
-names(dementia) <- 'USRDS_ID'
-head(dementia)
+# dementia <- read_csv('data/Dementia.csv')
+# names(dementia) <- 'USRDS_ID'
+# head(dementia)
+
+library(DBI)
+sql1 <- paste(capture.output(till2009 %>% 
+                               select(USRDS_ID, starts_with('HSDIAG')) %>% 
+                               show_query(), type='message')[-1], collapse=' ')
+sql2 <- paste(capture.output(from2010 %>% 
+                               select(USRDS_ID, starts_with('HSDIAG')) %>% 
+                               show_query(), type='message')[-1], collapse=' ')
+sqlist <- list(sql1,sql2)
+
+
+dement <- list()
+for (sql in sqlist){
+  rs <- dbSendQuery(sql_conn$con, sql)
+  while(!dbHasCompleted(rs)){
+    d <-  dbFetch(rs, n = 10000)
+    dement <-  c(dement, d %>% gather(hsdiag, code, -USRDS_ID) %>% 
+                   filter(str_detect(code, '^290|^2941|^331[012]')) %>% 
+                   select(USRDS_ID) %>% 
+                   distinct())
+  }
+  dbClearResult(rs)
+}
+
+dement <- data.frame(USRDS_ID = sort(unique(unlist(dement))))
 
 # Failure to thrive -------------------
+## This can appear in any of the diagnoses
+
+sql1 <- paste(capture.output(till2009 %>% 
+                               select(USRDS_ID, starts_with('HSDIAG')) %>% 
+                         show_query(), type='message')[-1], collapse=' ')
+sql2 <- paste(capture.output(from2010 %>% 
+                               select(USRDS_ID, starts_with('HSDIAG')) %>% 
+                               show_query(), type='message')[-1], collapse=' ')
+sqlist <- list(sql1,sql2)
+
+thrive = list()
+for (sql in sqlist) {
+  rs <- dbSendQuery(sql_conn$con, sql)
+  while (!dbHasCompleted(rs)) {
+    d <- dbFetch(rs, n = 10000)
+    thrive <- c(thrive,
+                d %>% gather(hsdiag, code, -USRDS_ID) %>% 
+                  filter(str_detect(code, '783[237]')) %>% 
+                  select(USRDS_ID) %>% 
+                  distinct())
+  }
+  dbClearResult(rs)
+}
+thrive <- data.frame(USRDS_ID = sort(unique(unlist(thrive))))
+
+rm(sql_conn); gc()
+
+hospitalization <- list('stroke_primary' = stroke_primary, 
+                        'stroke_compl' = stroke_compl,
+                        'LuCa' = LuCa,
+                        'MetsCa' = MetsCa,
+                        'dement' = dement,
+                        'thrive' = thrive)
+saveRDS(hospitalization, file = 'data/hospitalization_ids.rds')
