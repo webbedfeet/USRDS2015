@@ -1,4 +1,6 @@
-# Hospitalization data
+# Script to interrogate the hospital databases to extract IDs
+# of individuals who had prevalent comorbidities. This will be matched against
+# IDs of people discontinuing dialysis to see how the race pattern appears.
 
 source('lib/reload.R'); reload()
 dbdir = verifyPaths()
