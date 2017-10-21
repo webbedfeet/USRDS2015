@@ -7,3 +7,5 @@
 *.docx
 scripts/MonetDBLite-master/*
 h2ologs/*
+data/*
+*.log
