@@ -13,5 +13,15 @@ dbdir15 <- verifyPaths()
 dbdir14 <- verifyPaths(year=2014)
 
 con14 <- dbConnect(SQLite(), file.path(dbdir14, 'PR_db'))
-discontinue_id <- dbGetQuery(con14, 'select USRDS_ID from AnalyticData where cens_type=3')
+dat <- tbl(con14, 'AnalyticData')
+discontinue_id <- dat %>% filter(cens_type==3) %>% 
+  select(USRDS_ID, RACE2, HispGrps) %>% collect() %>% 
+  mutate(RACE2 = str_replace(RACE2, 'Nonhispanic ',''))
 
+hosp_id <- readRDS(file.path(dbdir15,'hospitalization_ids.rds'))
+
+disc_hosp_id <- lapply(hosp_id, filter, USRDS_ID %in% discontinue_id$USRDS_ID)
+sapply(disc_hosp_id, nrow)
+disc_hosp_race <- lapply(hosp_id, 
+                         function(x) discontinue_id %>% 
+                           filter(USRDS_ID %in% x$USRDS_ID) %>% count(RACE2))
