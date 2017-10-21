@@ -1,7 +1,7 @@
 # Script to verify if there is current access to database directories and to 
 # identify the directories where the databases reside
 
-verifyPaths <- function() {
+verifyPaths <- function(year = 2015) {
   require(stringr)
   if (Sys.info()['sysname'] == 'Windows') { # Work windows system
     a <- system('wmic logicaldisk get caption,volumename', intern = T)
@@ -30,7 +30,7 @@ verifyPaths <- function() {
       print('No access to database')
       return(NA)
     }
-    dbdir = file.path('/Volumes','ARAASTAT','NIAMS','Ward','USRDS','Data','2015 Data')
+    dbdir = file.path('/Volumes','ARAASTAT','NIAMS','Ward','USRDS','Data',paste(year,'data'))
     return(dbdir)
   }
 }
