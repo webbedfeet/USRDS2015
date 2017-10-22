@@ -3,6 +3,7 @@ pkgs <- c(
   'tidyverse',
   'stringr',
   'survival',
+  'broom',
   'DBI',
   'RSQLite',
   'MonetDBLite',
