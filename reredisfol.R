@@ -20,5 +20,9 @@ bl <- deaths_db %>% select(USRDS_ID, REREDISFOL) %>% collect()
 withdrew <- withdrew %>% left_join(bl)
 
 withdrew %>% count(REREDISFOL) %>% 
+  mutate(perc = 100*(n/sum(n)))  %>% 
+  mutate(REREDISFOL = c('','HD/PD access failure','Failure to thrive',
+                        'Acute medical complication','Other','Unknown', 'Missing'))
   
+
 
