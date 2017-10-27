@@ -38,6 +38,27 @@ the external disk label. The databases are on one of two external HDs. Backups o
 ### October 18, 2017
 I added to `verifyPaths` to include my laptop. 
 
+__REREDISFOL analysis__
+
+We first extract data from `AnalyticData`, which was our study dataset for the 2014 
+analysis, using `censtype==3`. We then used a left join to append the REREDISFOL data 
+to it and looked at frequency counts of what was available within the discontinued group.
+
+```
+# A tibble: 7 x 3
+                  REREDISFOL     n         perc
+                       <chr> <int>        <dbl>
+1                               10  0.006193369
+2       HD/PD access failure  1075  0.665787208
+3          Failure to thrive 52180 32.317001418
+4 Acute medical complication 33275 20.608436608
+5                      Other 65677 40.676192069
+6                    Unknown  8890  5.505905378
+7                    Missing   356  0.220483950
+```
+
+__Hospitalization analysis__
+
 We're looking at incident comorbidities from the 2015 hospitalization data. For this
 we're extracting IDs for people with these comorbidities in the hospital files. Then
 we will verify that these are incident cases by removing individuals who also had the 
@@ -46,4 +67,4 @@ same ICD9 codes in their medevid file.
 We also decided to extend the analysis to 2015 for completeness, working with the 
 1,131,409 individuals we did for the 2014 analysis and not adding new individuals.
 The data for the first analysis is in the `AnalyticData` table in the 2014 SQLite 
-database
+database.
