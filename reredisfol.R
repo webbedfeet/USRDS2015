@@ -1,6 +1,6 @@
 # Looking at reasons for discontinuation
-datadir2014 <- "P:/Mohammed"
 source('lib/reload.R'); reload()
+datadir2014 <- verifyPaths(2014)
 dbdir <- verifyPaths() # is the database directories available
 if (is.na(dbdir)) stop('Databases not accessible')
 sql_conn <- src_sqlite(file.path(dbdir,'USRDS.sqlite3'))
@@ -9,7 +9,7 @@ sql_conn <- src_sqlite(file.path(dbdir,'USRDS.sqlite3'))
 # mdb_conn <- src_monetdblite(dbdir)
 # # conn1 <- dbConnect(MonetDBLite(), dbdir)
 
-sql_2014 <- src_sqlite(file.path(datadir2014,'ALL Files', 'PR_db'))
+sql_2014 <- src_sqlite(file.path(datadir2014, 'PR_db'))
 study_tbl <- tbl(sql_2014, 'AnalyticData')
 withdrew <- study_tbl %>% select(USRDS_ID, cens_type) %>% filter(cens_type==3) %>% collect()
 

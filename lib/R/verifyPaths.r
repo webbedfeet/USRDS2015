@@ -14,13 +14,17 @@ verifyPaths <- function(year = 2015) {
     }
     if (length(ind) > 0) {
       drv <- str_split(a[[ind]], '\\s{2,}')[[1]][1]
-      dbdir <- file.path(drv,'Work','Ward','Studies','USRDS','2015 Data','2015 data')
+      if(year == 2015){
+        dbdir <- file.path(drv,'Work','Ward','Studies','USRDS','2015 Data','2015 data')
+      } else {
+        dbdir <- file.path(drv,'Work','Ward','Studies','USRDS','2014 Data')
+      }
     } else if (length(ind1) > 0) {
       drv <- str_split(a[[ind1]],'\\s{2,}')[[1]][1] # Priority for My Book
-      dbdir <- file.path(drv,'NIAMS','Ward','USRDS','Data','2015 data')
+      dbdir <- file.path(drv,'Data','USRDS',paste(year,'data'))
     } else {
       drv <- str_split(a[[ind2]], '\\s{2,}')[[1]][1]
-      dbdir <- file.path(drv,'NIAMS','Ward','USRDS','Data','2015 data')
+      dbdir <- file.path(drv,'NIAMS','Ward','USRDS','Data',paste(year,'data'))
     }
     return(dbdir)
   }
@@ -30,7 +34,7 @@ verifyPaths <- function(year = 2015) {
       print('No access to database')
       return(NA)
     }
-    dbdir = file.path('/Volumes','ARAASTAT','NIAMS','Ward','USRDS','Data',paste(year,'data'))
+    dbdir = file.path('/Volumes','ARAASTAT','NIAMS','Ward','USRDS','Data',paste(year,'data')) # Adds year
     return(dbdir)
   }
 }
