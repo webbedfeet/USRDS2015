@@ -73,4 +73,5 @@ database.
 
 ## File updates
 - [October 27, 2017] Copied PR_db at work to P:/Work/Ward/Studies/USRDS/2014 Data
+- [October 27, 2017] Added the 2014 study ids to the 2015 database (in `StudyIDs`)
 
