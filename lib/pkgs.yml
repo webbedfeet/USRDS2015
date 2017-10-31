@@ -1,0 +1,13 @@
+- ProjTemplate
+- tidyverse
+- stringr
+- survival
+- broom
+- DBI
+- RSQLite
+- MonetDBLite
+- reshape2
+- cowplot
+- cmprsk
+- rmarkdown
+
