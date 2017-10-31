@@ -68,3 +68,10 @@ We also decided to extend the analysis to 2015 for completeness, working with th
 1,131,409 individuals we did for the 2014 analysis and not adding new individuals.
 The data for the first analysis is in the `AnalyticData` table in the 2014 SQLite 
 database.
+
+-----
+
+## File updates
+- [October 27, 2017] Copied PR_db at work to P:/Work/Ward/Studies/USRDS/2014 Data
+- [October 27, 2017] Added the 2014 study ids to the 2015 database (in `StudyIDs`)
+- [October 27, 2017] Note that dates in 2015 DB have base as 1970-01-01 (R style), while those in 2014 have base as 1960-01-01 (SAS style)
