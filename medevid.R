@@ -1,9 +1,8 @@
 # Extract comorbidities data from medevid
 
-source('lib/reload.R');reload()
-
-library(DBI)
-library(RSQLite)
+ProjTemplate::reload()
+# library(DBI)
+# library(RSQLite)
 dbdir <- verifyPaths()
 if(is.na(dbdir)){
   stop('Disk not available')
@@ -15,3 +14,6 @@ sort(dbListFields(con, 'medevid'))
 
 medevid = tbl(con, 'medevid')
 medevid
+
+
+dbDisconnect(con)
