@@ -1,6 +1,6 @@
 # Data ingestion and munging
 
-source('lib/reload.R'); reload()
+ProjTemplate::reload()
 dbdir <- verifyPaths() # is the database directories available
 if (is.na(dbdir)) stop('Databases not accessible')
 
@@ -23,3 +23,5 @@ con14 <- dbConnect(SQLite(),file.path(dbdir2014,'PR_db'))
 dbGetQuery(con14,'select count(*) from AnalyticData')
 ids14 <- tbl(con14, 'AnalyticData') %>% select(USRDS_ID) %>% collect()
 dbWriteTable(sql_conn$con, 'StudyIDs', ids14)
+dbDisconnect(con14)
+dbDisconnect(sql_conn$con)
