@@ -77,12 +77,12 @@ head(MetsCa)
 # names(dementia) <- 'USRDS_ID'
 # head(dementia)
 
-library(DBI)
+StudyIDS <- studyids %>% collect(n=Inf)
 sql1 <- paste(capture.output(till2009 %>%
-                               select(USRDS_ID, starts_with('HSDIAG')) %>%
+                               select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU) %>%
                                show_query(), type='message')[-1], collapse=' ')
 sql2 <- paste(capture.output(from2010 %>%
-                               select(USRDS_ID, starts_with('HSDIAG')) %>%
+                               select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU) %>%
                                show_query(), type='message')[-1], collapse=' ')
 sqlist <- list(sql1,sql2)
 
@@ -92,10 +92,10 @@ for (sql in sqlist){
   rs <- dbSendQuery(sql_conn, sql)
   while(!dbHasCompleted(rs)){
     d <-  dbFetch(rs, n = 10000)
-    dement <-  c(dement, d %>% gather(hsdiag, code, -USRDS_ID) %>%
+    dement <-  c(dement, d %>% gather(hsdiag, code, -USRDS_ID, -CLM_FROM, -CLM_THRU) %>%
                    filter(str_detect(code, '^290|^2941|^331[012]')) %>%
-                   select(USRDS_ID) %>%
-                   distinct())
+                   select(USRDS_ID, CLM_FROM, CLM_THRU) %>%
+                   distinct() %>% inner_join(StudyIDS) %>% as.data.frame())
   }
   dbClearResult(rs)
 }
