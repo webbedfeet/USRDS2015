@@ -69,9 +69,27 @@ We also decided to extend the analysis to 2015 for completeness, working with th
 The data for the first analysis is in the `AnalyticData` table in the 2014 SQLite 
 database.
 
+# November 29, 2017
+
+1. Updated dB to have dates as text
+
+__Hospitalization data__  
+
+One of the issues in the 2015 data is that there are entries that are earlier than the entry time of 2003-01-01
+for many of the patients. This can result in incompatible results. I'm deferring the normalization of the 
+2014 and 2015 data, so that I can create the infrastructure to actually do the analysis for discontinuation we
+need, knowing that some of the dates of death, discontinuation, and entry do not tally with the 2014 data 
+(see `UpdateTo2015.R` for some of the details). 
+
+We should use CLM_FROM as the date of event
+
 -----
 
 ## File updates
 - [October 27, 2017] Copied PR_db at work to P:/Work/Ward/Studies/USRDS/2014 Data
 - [October 27, 2017] Added the 2014 study ids to the 2015 database (in `StudyIDs`)
 - [October 27, 2017] Note that dates in 2015 DB have base as 1970-01-01 (R style), while those in 2014 have base as 1960-01-01 (SAS style)
+- [November 22, 2017] Updated `Ingest_to_DB.R` to convert dates to text. Ran on home disk
+- [November 29, 2017] Ran `Ingest_to_DB.R` on P drive to convert dates to text in DB.
+- [November 29, 2017] Wrote `graph_discontinue.R`
+
