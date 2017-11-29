@@ -3,11 +3,20 @@
 #' date: `r Sys.Date()`
 #' ---
 
+# devtools::install_github('webbedfeet/ProjTemplate')
 ProjTemplate::reload()
 dbdir <- verifyPaths()
 dbdir14 <- verifyPaths(2014)
 con <- dbConnect(SQLite(), file.path(dbdir, 'USRDS.sqlite3'))
 
+# Grab and save the 2014 analytic data set
+con14 <- dbConnect(SQLite(), file.path(dbdir14, 'PR_db'))
+analytic_data <- tbl(con14,'AnalyticData') %>% collect(n=Inf)
+dbDisconnect(con14)
+saveRDS(analytic_data, 'data/rda/analytic14.rds')
+
+
+# Update death and transplant times.
 P <- tbl(con, 'StudyIDs') %>% left_join(tbl(con, 'patients'))
 M <- tbl(con, 'StudyIDs') %>% left_join(tbl(con, 'medevid'))
 
@@ -17,14 +26,13 @@ M %>% count() # 1159490
 P %>% select(USRDS_ID, DIED, FIRST_SE, TX1DATE) %>% 
   mutate(tod = (DIED - FIRST_SE)/365.25,
          tot = (TX1DATE - FIRST_SE)/365.25) %>% 
-  collect()  -> dat_p
+  collect(n = Inf)  -> dat_p
 
-con14 <- dbConnect(SQLite(), file.path(dbdir14, 'PR_db'))
-analytic_data <- tbl(con14,'AnalyticData') %>% collect()
-dbDisconnect(con14)
-saveRDS(analytic_data, 'data/rda/analytic14.rds')
-
-bl <- analytic_data %>% select(USRDS_ID, DIED, FIRST_SE, TX1DATE, tod, tot) %>% left_join(dat_p, by='USRDS_ID')
+bl <- analytic_data %>% 
+  select(USRDS_ID, DIED, FIRST_SE, TX1DATE, tod, tot) %>% 
+  left_join(dat_p, by='USRDS_ID') %>% 
+  mutate(first_se.x = as.Date(FIRST_SE.x, origin = '1960-01-01'),
+         first_se.y = as.Date(FIRST_SE.y, origin = '1970-01-01'))
 
 
 
@@ -33,7 +41,8 @@ bl <- analytic_data %>% select(USRDS_ID, DIED, FIRST_SE, TX1DATE, tod, tot) %>% 
 #' The `rxhist` table gives the treatments received by patients at different times during their time in the study
 #' What we do here is look at the sequential treatment codes, and find situations where there is discontinuation (`rxgroup=="B"`)
 #' which is not followed by any dialysis, which means that is the final discontinuation.
-tbl(con, 'StudyIDs') %>% left_join(tbl(con,'rxhist'), by = c("USRDS_ID" = "usrds_id")) %>% collect() -> rxhist # Restricted to earlier study
+tbl(con, 'StudyIDs') %>% left_join(tbl(con,'rxhist'), by = c("USRDS_ID" = "usrds_id")) %>%
+  collect() -> rxhist # Restricted to earlier study
 txpattern <- rxhist %>% 
   arrange(USRDS_ID, BEGDATE) %>% 
   group_by(USRDS_ID) %>% 

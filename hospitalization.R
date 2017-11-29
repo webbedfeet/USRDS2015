@@ -2,9 +2,9 @@
 # of individuals who had prevalent comorbidities. This will be matched against
 # IDs of people discontinuing dialysis to see how the race pattern appears.
 
-source('lib/reload.R'); reload()
+ProjTemplate::reload()
 dbdir = verifyPaths()
-sql_conn = src_sqlite(file.path(dbdir,'USRDS.sqlite3'))
+sql_conn = dbConnect(SQLite(), file.path(dbdir,'USRDS.sqlite3'))
 
 till2009 <- tbl(sql_conn, 'till2009')
 from2010 <- tbl(sql_conn, 'from2010')
@@ -82,7 +82,7 @@ sqlist <- list(sql1,sql2)
 
 dement <- list()
 for (sql in sqlist){
-  rs <- dbSendQuery(sql_conn$con, sql)
+  rs <- dbSendQuery(sql_conn, sql)
   while(!dbHasCompleted(rs)){
     d <-  dbFetch(rs, n = 10000)
     dement <-  c(dement, d %>% gather(hsdiag, code, -USRDS_ID) %>% 
@@ -108,7 +108,7 @@ sqlist <- list(sql1,sql2)
 
 thrive = list()
 for (sql in sqlist) {
-  rs <- dbSendQuery(sql_conn$con, sql)
+  rs <- dbSendQuery(sql_conn, sql)
   while (!dbHasCompleted(rs)) {
     d <- dbFetch(rs, n = 10000)
     thrive <- c(thrive,
@@ -121,7 +121,7 @@ for (sql in sqlist) {
 }
 thrive <- data.frame(USRDS_ID = sort(unique(unlist(thrive))))
 
-rm(sql_conn); gc()
+dbDisconnect(sql_conn); gc()
 
 hospitalization <- list('stroke_primary' = stroke_primary, 
                         'stroke_compl' = stroke_compl,
@@ -130,3 +130,21 @@ hospitalization <- list('stroke_primary' = stroke_primary,
                         'dement' = dement,
                         'thrive' = thrive)
 saveRDS(hospitalization, file = 'data/hospitalization_ids.rds')
+
+
+# Verifying incident cases from medevid ------------------------------------
+
+sql_conn <- dbConnect(SQLite(), file.path(dbdir, 'USRDS.sqlite3'))
+medevid <- tbl(sql_conn, 'medevid')
+studyids <- tbl(sql_conn, 'StudyIDs')
+medevid %>% inner_join(studyids) %>% count()
+joined_tbl <- medevid %>% inner_join(studyids)
+
+bl <- medevid %>% inner_join(studyids) %>% collect(n=5)
+bl2 <- joined_tbl %>% select(USRDS_ID,COMO_CVATIA, CANCER, COMO_CANC, CTDATE, DIALDAT, DIALEDT, DIED) %>% 
+  collect(n=Inf) %>% 
+  filter(COMO_CVATIA !='') 
+bl2 <- bl2 %>% 
+  group_by(USRDS_ID) %>% 
+  top_n(-1, DIALDAT) %>% 
+  ungroup()

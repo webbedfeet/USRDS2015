@@ -1,8 +1,6 @@
 # Extract comorbidities data from medevid
 
 ProjTemplate::reload()
-# library(DBI)
-# library(RSQLite)
 dbdir <- verifyPaths()
 if(is.na(dbdir)){
   stop('Disk not available')
