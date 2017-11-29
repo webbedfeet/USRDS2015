@@ -8,17 +8,19 @@ sql_conn = dbConnect(SQLite(), file.path(dbdir,'USRDS.sqlite3'))
 
 till2009 <- tbl(sql_conn, 'till2009')
 from2010 <- tbl(sql_conn, 'from2010')
+studyids <- tbl(sql_conn, 'StudyIDs')
 dbs <- list(till2009, from2010)
 
 # Stroke ------------------------------------------------------------------
 
 stroke <- dbs %>%
   lapply(., function(db){
-    db %>%
-      select(USRDS_ID, starts_with('HSDIAG'))%>%
+    db %>% 
+      select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU)%>%
       mutate(PRIM = substr(HSDIAG1,1,3)) %>%
       filter(PRIM == '430' | PRIM=='431' | PRIM == '432' | PRIM == '433' | PRIM=='434') %>%
-      collect()
+      inner_join(studyids) %>% 
+      collect(n = Inf)
   })
 
 stroke_primary <- stroke %>%
