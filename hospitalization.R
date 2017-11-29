@@ -19,25 +19,26 @@ stroke <- dbs %>%
       select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU)%>%
       mutate(PRIM = substr(HSDIAG1,1,3)) %>%
       filter(PRIM == '430' | PRIM=='431' | PRIM == '432' | PRIM == '433' | PRIM=='434') %>%
-      inner_join(studyids) %>%
+      inner_join(studyids) %>% # Keep only individuals in earlier study
       collect(n = Inf)
   })
 
 stroke_primary <- stroke %>%
-  lapply(., function(db) db %>%  select(USRDS_ID)) %>% bind_rows() %>% distinct()
+  lapply(., function(db) db %>%  select(USRDS_ID, CLM_FROM, CLM_THRU)) %>% bind_rows() %>% distinct() %>% 
+  mutate(dt = date_midpt(CLM_FROM, CLM_THRU))
 head(stroke_primary)
 # Stroke with complications -----------------------------------------------
 
 stroke_compl <- stroke %>%
   lapply(., function(db){
-    db %>% gather(diag, code, -USRDS_ID, -HSDIAG1, -CLM_THRU) %>%
+    db %>% gather(diag, code, -USRDS_ID, -HSDIAG1, -CLM_THRU, -CLM_FROM) %>%
       mutate(code1 = substr(code,1,3)) %>%
       filter(code1 %in% c('438','342','344')) %>%
-      select(USRDS_ID) %>%
+      select(USRDS_ID, CLM_FROM, CLM_THRU) %>%
       distinct()
   }) %>%
   bind_rows() %>%
-  distinct()
+  distinct() %>% mutate(dt = date_midpt(CLM_FROM,CLM_THRU))
 
 head(stroke_compl)
 
@@ -46,9 +47,12 @@ head(stroke_compl)
 LuCa <- dbs %>%
   lapply(., function(db){
     db %>% mutate(PRIM = substr(HSDIAG1,1,3)) %>%
-      filter(PRIM=='162') %>% select(USRDS_ID) %>% collect(n=Inf)
+      filter(PRIM=='162') %>% 
+      inner_join(studyids) %>% # Keep only individuals in earlier study
+      select(USRDS_ID, CLM_FROM, CLM_THRU) %>% collect(n=Inf)
   }) %>%
-  bind_rows() %>% distinct()
+  bind_rows() %>% distinct() %>% 
+  mutate(dt = date_midpt(CLM_FROM, CLM_THRU))
 head(LuCa)
 # Metastatic cancer -------------------------------------------------------
 
@@ -56,9 +60,10 @@ MetsCa <- dbs %>%
   lapply(., function(db){
   db %>% mutate(PRIM=substr(HSDIAG1,1,3)) %>%
     filter(PRIM== '196' | PRIM == '197' | PRIM == '198' | PRIM == '199') %>%
-    select(USRDS_ID) %>% collect(n = Inf)}) %>%
+      inner_join(studyids) %>% 
+    select(USRDS_ID, CLM_FROM, CLM_THRU) %>% collect(n = Inf)}) %>%
   bind_rows() %>%
-  distinct()
+  distinct() %>% mutate(dt = date_midpt(CLM_FROM, CLM_THRU))
 head(MetsCa)
 # Dementia ----------------------------------------------------------------
 
