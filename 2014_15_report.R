@@ -50,4 +50,4 @@ pander::pander(d %>% filter(FIRST_SE14 > DIED15), missing='')
 
 con <- dbConnect(SQLite(), file.path(dbdir, 'USRDS.sqlite3'))
 
-#' 
+#'
