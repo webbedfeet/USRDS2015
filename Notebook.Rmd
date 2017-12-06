@@ -93,3 +93,53 @@ We should use CLM_FROM as the date of event
 - [November 29, 2017] Ran `Ingest_to_DB.R` on P drive to convert dates to text in DB.
 - [November 29, 2017] Wrote `graph_discontinue.R`
 
+
+
+-----
+
+# Data coding for discontinuation analyses
+
+### patients::RXSTOP
+
+Code  | Explanation
+----- | -------------------------------------------
+A     | Yes, following HD and/or PD access failure
+B     | Yes, following transplant failure
+C     | Yes, following chronic failure to thrive
+D     | Yes, following acute medical complication
+E     | Yes, other
+N     | No
+U     | Did not answer the question
+Y     | Yes, dialysis stop reason unknown
+
+
+### patients::RACE
+
+Code | Explanation
+---- | ---------------
+#    | All
+1    | Native Amer.
+2    | Asian
+3    | Black
+4    | White
+5    | Unknown
+9    | Other
+T    | All
+
+
+### rxhist60::RXGROUP
+
+Code | Explanation
+---- | -----------
+1    | Hemodialysis
+2    | Center self hemo
+3    | Home hemo
+5    | CAPD
+7    | CCPD
+9    | Other peri
+A    | Uncertain Dialysis
+B    | Discontinued Dialysis
+D    | Death
+T    | Transplant
+X    | Lost to followup
+Z    | Recovered Function

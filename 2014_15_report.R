@@ -16,8 +16,13 @@ ProjTemplate::reload()
 dbdir <- verifyPaths()
 dbdir14 <- verifyPaths(2014)
 con <- dbConnect(SQLite(), file.path(dbdir, 'USRDS.sqlite3'))
-con2 <- dbConnect(SQLite(), file.path(dbdir14, 'PR_db'))
+con2 <- dbConnect(SQLite(), file.path(dbdir14, 'USRDS14.sqlite3'))
+con3 <- dbConnect(SQLite(), file.path(dbdir14, 'PR_db'))
 knitr::opts_chunk$set(echo=FALSE)
+
+## Add study ids to the 2014 DB
+studyids = dbGetQuery(con, 'select * from StudyIDs')
+dbWriteTable(con2, 'StudyIDs', studyids, overwrite=TRUE)
 
 #+ setup, echo = FALSE, cache=TRUE, message=FALSE
 analytic_data <- readRDS('data/rda/analytic14.rds')
@@ -48,6 +53,24 @@ pander::pander(d %>% filter(FIRST_SE14 > DIED15), missing='')
 
 #' ### Withdrawal times
 
+## First determine who is still a final discontinuation, and then compare discontinuation times
 con <- dbConnect(SQLite(), file.path(dbdir, 'USRDS.sqlite3'))
+con2 <- dbConnect(SQLite(), file.path(dbdir14, 'USRDS14.sqlite3'))
 
+true_withdraw15 <- tbl(con, 'StudyIDs') %>% left_join(tbl(con, 'rxhist60') %>% select(USRDS_ID, RXGROUP)) %>% collect(n=Inf) %>% 
+  group_by(USRDS_ID) %>% summarise(tx = paste(RXGROUP, collapse='')) %>% 
+  filter(str_detect(tx,'B')) %>% 
+  filter(detect_event(tx, 'B')) %>% 
+  ungroup()
+
+true_withdraw14 <- tbl(con2, 'StudyIDs') %>% left_join(tbl(con, 'rxhist60') %>% select(USRDS_ID, RXGROUP)) %>% collect(n=Inf) %>% 
+  group_by(USRDS_ID) %>% summarise(tx = paste(RXGROUP, collapse='')) %>% 
+  filter(str_detect(tx,'B')) %>% 
+  filter(detect_event(tx, 'B')) %>% 
+  ungroup()
+
+ind <- setdiff(true_withdraw15$USRDS_ID, true_withdraw14$USRDS_ID)
+rxhist14 <- dbGetQuery(con2, 'select * from rxhist60')
+rxhist15 <- dbGetQuery(con, 'select * from rxhist60')
+rxhist15 %>% filter(USRDS_ID %in% ind) %>% filter(RXGROUP=='B') %>% summarise(sum(BEGDATE < '2014-06-30')) # Revised discontinues
 #'
