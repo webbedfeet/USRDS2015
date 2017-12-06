@@ -83,6 +83,12 @@ need, knowing that some of the dates of death, discontinuation, and entry do not
 
 We should use CLM_FROM as the date of event
 
+# December 7, 2017
+
+We're looking at updates in withdrawal times. It looks like some people in the original cohort were revised 
+as discontinuing before death, and so we add about 1820 people to the potential discontinuation pool.
+
+
 -----
 
 ## File updates
