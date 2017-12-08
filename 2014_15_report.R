@@ -52,25 +52,70 @@ pander::pander(d %>% filter(FIRST_SE15 < '2003-01-01') %>% arrange(FIRST_SE15), 
 pander::pander(d %>% filter(FIRST_SE14 > DIED15), missing='')
 
 #' ### Withdrawal times
+#+ message=F, warning=F
 
 ## First determine who is still a final discontinuation, and then compare discontinuation times
 con <- dbConnect(SQLite(), file.path(dbdir, 'USRDS.sqlite3'))
 con2 <- dbConnect(SQLite(), file.path(dbdir14, 'USRDS14.sqlite3'))
 
-true_withdraw15 <- tbl(con, 'StudyIDs') %>% left_join(tbl(con, 'rxhist60') %>% select(USRDS_ID, RXGROUP)) %>% collect(n=Inf) %>% 
+studyids <- dbGetQuery(con, 'select * from StudyIDs')
+
+true_withdraw15 <- dbGetQuery(con, 'select USRDS_ID, RXGROUP from rxhist60') %>%
+  right_join(studyids) %>% 
   group_by(USRDS_ID) %>% summarise(tx = paste(RXGROUP, collapse='')) %>% 
   filter(str_detect(tx,'B')) %>% 
   filter(detect_event(tx, 'B')) %>% 
   ungroup()
 
-true_withdraw14 <- tbl(con2, 'StudyIDs') %>% left_join(tbl(con, 'rxhist60') %>% select(USRDS_ID, RXGROUP)) %>% collect(n=Inf) %>% 
+withdraw15_dates <- dbGetQuery(con, 'select USRDS_ID, RXGROUP, BEGDATE, ENDDATE, DEATH from rxhist60 where RXGROUP="B"') %>% 
+  filter(USRDS_ID %in% studyids$USRDS_ID) %>% 
+  right_join(true_withdraw15)
+
+true_withdraw14 <- dbGetQuery(con2, 'select USRDS_ID, RXGROUP from rxhist60') %>%
+  right_join(studyids) %>% 
   group_by(USRDS_ID) %>% summarise(tx = paste(RXGROUP, collapse='')) %>% 
   filter(str_detect(tx,'B')) %>% 
   filter(detect_event(tx, 'B')) %>% 
   ungroup()
+withdraw14_dates <- dbGetQuery(con2, 'select USRDS_ID, RXGROUP, BEGDATE, ENDDATE from rxhist60 where RXGROUP="B"') %>% 
+  filter(USRDS_ID %in% studyids$USRDS_ID) %>% 
+  right_join(true_withdraw14)
 
-ind <- setdiff(true_withdraw15$USRDS_ID, true_withdraw14$USRDS_ID)
-rxhist14 <- dbGetQuery(con2, 'select * from rxhist60')
-rxhist15 <- dbGetQuery(con, 'select * from rxhist60')
-rxhist15 %>% filter(USRDS_ID %in% ind) %>% filter(RXGROUP=='B') %>% summarise(sum(BEGDATE < '2014-06-30')) # Revised discontinues
-#'
+
+
+
+indx1 <- setdiff(true_withdraw14$USRDS_ID, true_withdraw15$USRDS_ID)
+indx2 <- setdiff(true_withdraw15$USRDS_ID, true_withdraw14$USRDS_ID)
+
+explore_years <- function(id){
+  con <- dbConnect(SQLite(), file.path(dbdir, 'USRDS.sqlite3'))
+  con2 <- dbConnect(SQLite(), file.path(dbdir14, 'USRDS14.sqlite3'))
+  query <- paste('select * from rxhist60 where USRDS_ID =', id)
+  print("2014 DB")
+  print(dbGetQuery(con2, query))
+  print("2015 DB")
+  print(dbGetQuery(con, query))
+  dbDisconnect(con); dbDisconnect(con2)
+}
+
+rxhist14 <- dbGetQuery(con2, 'select USRDS_ID from rxhist60') %>% right_join(studyids)
+rxhist15 <- dbGetQuery(con, 'select * from rxhist60') %>% right_join(studyids)
+indx3 <- rxhist15 %>% filter(is.na(RXGROUP)) %>%  dplyr::pull(USRDS_ID) %>% intersect(withdraw14_dates$USRDS_ID)
+#' There are `r length(indx1)` subjects who discontinued according to 2014 DB but not according to 2015 DB. Some of these 
+#' individuals now have no record of discontinuation but die on the same date, and some restarted dialysis after 2014-06-30. 
+#' There are also `r length(indx3)` subjects who are discontinuations in 2014 but whose data is missing in 2015. 
+#' Conversely there are `r length(indx2)` subjects who were deemed not to have discontinued in 2014 DB but have discontinued in
+#' 2015 DB. Some of these are new discontinuation status before death (which is on the same date as before), and some have 
+#' discontinued in the last year. 
+#' 
+#' ## Transplant dates
+
+tx_2014 <- dbGetQuery(con2, 'select USRDS_ID, TX1DATE from patients') %>% right_join(studyids)
+tx_2015 <- dbGetQuery(con, 'select USRDS_ID, TX1DATE from patients') %>% right_join(studyids)
+
+tx_discr <- tx_2014 %>% full_join(tx_2015, by = 'USRDS_ID', suffix = c('_14','_15')) %>% filter(TX1DATE_14 != TX1DATE_15) %>% 
+  mutate(date_diff = as.Date(TX1DATE_15)-as.Date(TX1DATE_14))
+#' There are `r nrow(tx_discr)` subjects who have different transplant dates in 2014 and 2015, and these daes can 
+#' vary quite a bit. The difference in dates can range from `r min(as.numeric(tx_discr$date_diff))/365` years to 
+#' `r max(as.numeric(tx_discr$date_diff))/365` years.
+#'  
