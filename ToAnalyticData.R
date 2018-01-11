@@ -64,4 +64,14 @@ Dat <- Dat %>% group_by(USRDS_ID) %>%
   mutate_at(vars(DIABINS:Smoke), normalize_dichot) %>% 
   ungroup() %>% 
   distinct()
+# 2,729,349 obs, 2,675,390 unique
 
+# Normalize ethnicity
+Dat <- Dat %>% mutate(ETHN = ifelse(ETHN == '4', NA, ETHN)) %>% 
+  group_by(USRDS_ID) %>% 
+  mutate(ETHN2 = normalize_ethn(ETHN)) %>% 
+  ungroup() %>% 
+  mutate(ETHN = ETHN2) %>% 
+  select(-ETHN2) %>% 
+  mutate(ETHN = ifelse(is.na(ETHN), '4', ETHN)) %>% 
+  distinct()
