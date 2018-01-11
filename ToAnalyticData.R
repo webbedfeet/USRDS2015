@@ -92,4 +92,29 @@ Dat[Dat$USRDS_ID==732813,"COUNTRY"] <-  174
 Dat <- distinct(Dat)
 # 2,675,390 obs, 2,675,390 unique
 
+
+# Update regions
+a1 <- as.character(c(23, 50, 33, 25, 09, 36, 42, 44, 34)) # Northeast
+a2 <- as.character(c(48, 40, 05, 22, 28, 01, 47, 21, 12, 13, 45, 37, 51, 11, 24, 10, 54,78, 72 )) # South
+a3 <- as.character(c(20, 31, 46, 38, 29, 19, 27, 17, 55, 18, 26, 39)) # Midwest
+a4 <- as.character(c(02, 15, 06, 41, 53, 32, 04, 49, 16, 35, 08, 56, 30, 66, 69, 60,64)) # West
+
+Dat <- Dat %>%
+  mutate(REGION = case_when(
+    Dat$STATE %in% a1 ~ "Northeast",
+    Dat$STATE %in% a2 ~ 'South',
+    Dat$STATE %in% a3 ~ "Midwest",
+    Dat$STATE %in% a4 ~ "West"
+  ))
+
 saveRDS(Dat, file = 'data/rda/normalizedData.rds')
+
+
+# Missing value imputation ------------------------------------------------
+
+Dat %>% summarise_all(funs(100*mean(is.na(.)))) %>% View()
+
+#' Missing data:
+#' + BMI: 23.47% (2014 data had 0%)
+#' + COUNTRY: 92.65% (2014 data had 88.14% )
+#' 
