@@ -31,6 +31,12 @@ M <- tbl(sql_conn, 'medevid') %>%
 
 Dat <- inner_join(P, M) %>% collect(n=Inf) %>% distinct()
 # 2,802,269, with 2,675,390 unique observations
+
+Dat <- Dat %>% 
+  mutate(dmfail = ifelse(str_detect(PDIS,'^250'), 'Y','N'),
+         DIABETES = ifelse(dmfail=='Y', 'Y','N'),
+         DIABETES = ifelse(DIABETES=='N' & (DIABINS=='Y' | DIABPRIM=='Y'), 'Y', DIABETES)) %>% 
+  select(-dmfail, -DIABINS, -DIABPRIM)
 saveRDS(Dat, file = 'data/rda/rawdata.rds')
 
 # Check why there are duplicates ------------------------------------------
@@ -117,4 +123,5 @@ Dat %>% summarise_all(funs(100*mean(is.na(.)))) %>% View()
 #' Missing data:
 #' + BMI: 23.47% (2014 data had 0%)
 #' + COUNTRY: 92.65% (2014 data had 88.14% )
-#' 
+#' We might fill in some gaps with 2014 data
+
