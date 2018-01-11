@@ -75,3 +75,21 @@ Dat <- Dat %>% mutate(ETHN = ifelse(ETHN == '4', NA, ETHN)) %>%
   select(-ETHN2) %>% 
   mutate(ETHN = ifelse(is.na(ETHN), '4', ETHN)) %>% 
   distinct()
+# 2,688,050 obs, 2,675,390 unique
+
+# Normalize country
+
+Dat <- Dat %>% group_by(USRDS_ID) %>% 
+  mutate(COUNTRY = normalize_country(COUNTRY)) %>% 
+  ungroup() %>% 
+  distinct()
+# 2,675,392 obs, 2,675,390 unique
+
+#' Individual 732813 has affiliation to both Mexico and PR. I will put this individual in with PR. This is the only 
+#' discrepancy left
+
+Dat[Dat$USRDS_ID==732813,"COUNTRY"] <-  174
+Dat <- distinct(Dat)
+# 2,675,390 obs, 2,675,390 unique
+
+saveRDS(Dat, file = 'data/rda/normalizedData.rds')
