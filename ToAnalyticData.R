@@ -140,4 +140,18 @@ d <- Dat %>% select(Cancer:Smoke) %>%
   mutate_all(funs(ifelse(.=='Y', 1,0))) %>% 
   as.data.frame()
 dpr <- t(as.matrix(d))
-d1pr <- impute.knn(dpr, colmax=0.9)
+ind <- which(apply(dpr, 2, function(x) sum(is.na(x)))==8)
+n <- ncol(dpr); p <- nrow(dpr)
+d1pr <- impute.knn(dpr[,-ind], colmax=0.9)
+bl <- matrix(NA, p, n)
+bl[,-ind] <- d1pr$data
+d1 <- data.frame(t(round(bl)))
+d1 <- d1 %>% mutate_all(funs(factor(ifelse(.==1,'Y','N'))))
+v <- row.names(d1pr$data)
+Dat[,v] <- d1
+
+saveRDS(Dat,'data/rda/imputedData.rds')
+
+# Filtering based on values -----------------------------------------------
+
+
