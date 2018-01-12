@@ -154,4 +154,62 @@ saveRDS(Dat,'data/rda/imputedData.rds')
 
 # Filtering based on values -----------------------------------------------
 
+## First_SE after 1/1/2003
 
+Dat <- Dat %>% filter(FIRST_SE >= '2003-01-01') # 1,382,049 observations
+
+# First_SE before 12/31/2014, so at least 6 months followup for all
+
+Dat <- Dat %>% filter(FIRST_SE <= '2014-12-31') # 1,329,966 observations
+
+## Transplant after first exam
+ind <- with(Dat, FIRST_SE==TX1DATE)
+ids <- Dat$USRDS_ID[which(ind & !is.na(ind))]
+`%notin%` <- Negate('%in%')
+Dat <- Dat %>% filter(USRDS_ID %notin% ids) %>% 
+  filter(INC_AGE >= 18 & INC_AGE <= 100) %>% 
+  filter(!is.na(SEX)) %>% 
+  mutate(His.Nhis = ifelse(HISPANIC==1, ifelse(!is.na(COUNTRY),2,1),2)) 
+
+# 1,291,001 observations
+
+Dat <- Dat %>%   select(USRDS_ID, FIRST_SE, PDIS, RXSTOP, TX1DATE, USA, ZIPCODE, DIALTYPE, DIABETES, DIED, SEX,
+         REGION, BMI, COUNTRY, STATE, INC_AGE, RACE, HISPANIC, Cancer:Smoke, His.Nhis)
+
+
+
+# Data munging ------------------------------------------------------------
+
+Dat <- Dat %>% mutate(RACE = ifelse(RACE=='9','5', RACE)) %>% 
+  mutate(RACE2 = case_when(
+    RACE == '1' ~ 'Native American',
+    RACE == '2' ~ 'Asian',
+    RACE == '3' ~ 'Black',
+    RACE =='4' ~ 'White',
+    RACE == '5' ~ 'Other')) %>% 
+  mutate(RACE2 = ifelse(HISPANIC==1, 'Hispanic', RACE))
+
+Dat <- Dat %>% mutate(AGEGRP = cut(INC_AGE, c(18, 29,39,49,59,69,100), include.lowest = T))
+
+# Change country code > 240 to missing
+Dat <- Dat %>% mutate(COUNTRY = ifelse(COUNTRY > 240, NA, COUNTRY))
+
+# Update PR status
+
+PRfolks <- Dat %>% filter(HISPANIC==1 & (COUNTRY == 174 | STATE == 72)) %>% dplyr::pull(USRDS_ID)
+Dat <- Dat %>% mutate(COUNTRY = ifelse(USRDS_ID %in% PRfolks, 174, COUNTRY))
+
+
+# Indicator for hispanics
+
+Dat <- Dat %>% mutate(HispSubgrp = ifelse(HISPANIC == 1 | RACE2 =='White', 1, 0))
+Dat <- Dat %>% 
+  mutate(HispPR = ifelse(HISPANIC==1 & COUNTRY == 174 & !is.na(COUNTRY), 1,0),
+         HispUS = ifelse(HISPANIC == 1 & (COUNTRY %in% c(227,88,235,160,5) & !is.na(COUNTRY)), 2,0),
+         HispNon = ifelse(HISPANIC == 1 & HispPR==0 & HispUS == 0 & !is.na(COUNTRY), 3, 0),
+         HispUnk = ifelse (HISPANIC == 1 & is.na(COUNTRY), 4,0)) %>% 
+  mutate(HispGrps = HispPR + HispUS + HispNon + HispUnk) %>% 
+  mutate(HispGrps = ifelse(HispSubgrp == 1, HispGrps, NA)) %>% 
+  mutate(HispGrps = factor(HispGrps, labels = c('HispPR','NonHispWh','HispOther', 'HispUnknown')))
+
+saveRDS(Dat, 'data/rda/interim.rds')
