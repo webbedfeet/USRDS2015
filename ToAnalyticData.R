@@ -62,15 +62,15 @@ Dat <- Dat %>% group_by(USRDS_ID) %>%
   mutate(BMI = BMI2) %>% 
   select(-BMI2) %>% 
   distinct()
-# 2,786,144 obs, 2,675,390 uniques
+# 2,783,664 obs, 2,675,390 uniques
 
 # Normalzing dichotomous variables
 
 Dat <- Dat %>% group_by(USRDS_ID) %>% 
-  mutate_at(vars(DIABINS:Smoke), normalize_dichot) %>% 
+  mutate_at(vars(Cancer:Smoke), normalize_dichot) %>% 
   ungroup() %>% 
   distinct()
-# 2,729,349 obs, 2,675,390 unique
+# 2,734,641 obs, 2,675,390 unique
 
 # Normalize ethnicity
 Dat <- Dat %>% mutate(ETHN = ifelse(ETHN == '4', NA, ETHN)) %>% 
@@ -81,10 +81,10 @@ Dat <- Dat %>% mutate(ETHN = ifelse(ETHN == '4', NA, ETHN)) %>%
   select(-ETHN2) %>% 
   mutate(ETHN = ifelse(is.na(ETHN), '4', ETHN)) %>% 
   distinct()
-# 2,688,050 obs, 2,675,390 unique
+# 2,697,112 obs, 2,675,390 unique
 
 # Normalize country
-
+# Stuck here now
 Dat <- Dat %>% group_by(USRDS_ID) %>% 
   mutate(COUNTRY = normalize_country(COUNTRY)) %>% 
   ungroup() %>% 
