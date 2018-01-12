@@ -45,6 +45,8 @@ char_na <- function(x){
   return(ifelse(x == '', NA, x))
 }
 Dat <- Dat %>% mutate_if(is.character, char_na)
+
+
 multiple_row_ids <- Dat %>% count(USRDS_ID) %>% 
   filter(n > 1) %>% 
   dplyr::pull(USRDS_ID)
@@ -82,6 +84,14 @@ Dat <- Dat %>% mutate(ETHN = ifelse(ETHN == '4', NA, ETHN)) %>%
   mutate(ETHN = ifelse(is.na(ETHN), '4', ETHN)) %>% 
   distinct()
 # 2,697,112 obs, 2,675,390 unique
+
+# Normalize diabetes
+
+Dat <- Dat %>% group_by(USRDS_ID) %>% 
+  mutate(DIABETES  = normalize_dm(DIABETES)) %>% 
+  ungroup() %>% 
+  distinct()
+# 2,668,050 obs, 2,674,390 unique
 
 # Normalize country
 # Stuck here now
@@ -124,4 +134,10 @@ Dat %>% summarise_all(funs(100*mean(is.na(.)))) %>% View()
 #' + BMI: 23.47% (2014 data had 0%)
 #' + COUNTRY: 92.65% (2014 data had 88.14% )
 #' We might fill in some gaps with 2014 data
+#' We need to impute data on comorbidities using kNN
 
+d <- Dat %>% select(Cancer:Smoke) %>% 
+  mutate_all(funs(ifelse(.=='Y', 1,0))) %>% 
+  as.data.frame()
+dpr <- t(as.matrix(d))
+d1pr <- impute.knn(dpr, colmax=0.9)
