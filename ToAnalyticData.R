@@ -213,3 +213,16 @@ Dat <- Dat %>%
   mutate(HispGrps = factor(HispGrps, labels = c('HispPR','NonHispWh','HispOther', 'HispUnknown')))
 
 saveRDS(Dat, 'data/rda/interim.rds')
+
+
+# Defining withdrawal from rxhist -------------------------------------------------------------
+
+rxhist <- tbl(sqlconn, 'rxhist60') %>% collect() %>% semi_join(Dat)
+
+txpattern <- rxhist %>% group_by(USRDS_ID) %>% 
+  summarise(tx = paste(RXGROUP, collapse='')) %>% # Create string of treatment pattern
+  ungroup()
+
+
+
+
