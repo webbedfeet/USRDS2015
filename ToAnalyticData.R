@@ -217,12 +217,55 @@ saveRDS(Dat, 'data/rda/interim.rds')
 
 # Defining withdrawal from rxhist -------------------------------------------------------------
 
-rxhist <- tbl(sqlconn, 'rxhist60') %>% collect() %>% semi_join(Dat)
+rxhist <- tbl(sql_conn, 'rxhist60') %>% collect() %>% filter(USRDS_ID %in% Dat$USRDS_ID)
 
 txpattern <- rxhist %>% group_by(USRDS_ID) %>% 
   summarise(tx = paste(RXGROUP, collapse='')) %>% # Create string of treatment pattern
   ungroup()
 
+ids <- Dat %>% filter(RXSTOP %in% c('A','C','D','E')) %>% dplyr::pull(USRDS_ID)
+txpattern_withdraw <- txpattern %>%
+  filter(str_detect(tx, 'B')) %>% # Discontinued
+  filter(!str_detect(str_match(tx, '.+[B](.*)')[,2],'[0-9]')) # but no further dialysis
+
+blah <- rxhist %>% semi_join(txpattern_withdraw, by='USRDS_ID') %>% 
+  filter(RXGROUP=='B') %>% 
+  group_by(USRDS_ID) %>% 
+  filter(BEGDATE == max(BEGDATE)) %>% 
+  ungroup() %>% 
+  mutate(BEGIN_withdraw = BEGDATE) %>% 
+  select(USRDS_ID, BEGIN_withdraw) %>% 
+  filter(USRDS_ID %in% ids)
+
+Dat <- Dat %>% left_join(blah)
 
 
+# Loss to follow-up and/or recovery of function -----------------------------------------------
 
+txpattern_cens <- txpattern %>% filter(str_detect(tx, 'X|Z')) %>% 
+  filter(!str_detect(str_match(tx, '.+[X|Z](.*)')[,2], '[0-9]'))
+# no dialysis after loss to followup (X) or recovery of function (Z)
+
+crud_x <- rxhist %>% 
+  filter(USRDS_ID %in% txpattern_cens$USRDS_ID) %>% 
+  filter(RXGROUP == 'X') %>% 
+  group_by(USRDS_ID) %>% 
+  filter(BEGDATE == max(BEGDATE)) %>% 
+  ungroup()
+crud_z <- rxhist %>% 
+  filter(USRDS_ID %in% txpattern_cens$USRDS_ID) %>% 
+  filter(RXGROUP == 'Z') %>% 
+  group_by(USRDS_ID) %>% 
+  filter(BEGDATE == max(BEGDATE)) %>% 
+  ungroup()
+
+crud = rbind(crud_x, crud_z) %>% 
+  group_by(USRDS_ID) %>% 
+  filter(BEGDATE == min(BEGDATE)) %>%  # find earlier of X and Z dates
+  ungroup() %>% 
+  mutate(BEGIN_cens = BEGDATE) %>% 
+  select(USRDS_ID, BEGIN_cens)
+
+Dat <- Dat %>% left_join(crud) %>% 
+  mutate(withdraw = ifelse(RXSTOP %in% c('A','C','D','E'),1,0),
+         withdraw_time = ifelse(withdraw==1, pmin(BEGIN_withdraw, DIED - 7)))

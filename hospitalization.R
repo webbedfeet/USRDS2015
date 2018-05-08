@@ -1,6 +1,15 @@
-# Script to interrogate the hospital databases to extract IDs
-# of individuals who had prevalent comorbidities. This will be matched against
-# IDs of people discontinuing dialysis to see how the race pattern appears.
+##%######################################################%##
+#                                                          #
+####             Script to interrogate the              ####
+####           hospital databases to extract            ####
+####                IDs # of individuals                ####
+####       who had prevalent comorbidities. This        ####
+####      will be matched against # IDs of people       ####
+####           discontinuing dialysis to see            ####
+####           how the race pattern appears.            ####
+#                                                          #
+##%######################################################%##
+
 
 ProjTemplate::reload()
 dbdir = verifyPaths()
