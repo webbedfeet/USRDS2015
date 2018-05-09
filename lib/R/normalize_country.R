@@ -7,6 +7,9 @@
 #'
 #' @examples
 normalize_country <- function(x){
+  if(all(is.na(x))){
+    return(x)
+  }
   if (length(x) == 1) {
     return(x)
   }
