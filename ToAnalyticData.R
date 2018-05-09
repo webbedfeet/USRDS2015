@@ -64,8 +64,8 @@ Dat <- Dat %>% group_by(USRDS_ID) %>%
   mutate(BMI = ifelse(is.na(BMI), BMI2, BMI)) %>% # median imputation
   select(-BMI2) %>% 
   distinct()
-# 2,800,638 obs, 2,675,390 uniques
-# 2,783,664 obs, 2,675,390 uniques
+# 2,800,638 obs, 2,675,390 uniques after imputing just missing BMI values
+## 2,783,664 obs, 2,675,390 uniques
 
 # Normalzing dichotomous variables
 
@@ -73,6 +73,7 @@ Dat <- Dat %>% group_by(USRDS_ID) %>%
   mutate_at(vars(Cancer:Smoke), normalize_dichot) %>% 
   ungroup() %>% 
   distinct()
+# 2,781,281 obs, 2,675,390 uniques
 # 2,734,641 obs, 2,675,390 unique
 
 # Normalize ethnicity
@@ -84,6 +85,7 @@ Dat <- Dat %>% mutate(ETHN = ifelse(ETHN == '4', NA, ETHN)) %>%
   select(-ETHN2) %>% 
   mutate(ETHN = ifelse(is.na(ETHN), '4', ETHN)) %>% 
   distinct()
+# 2,746,881 obs, 2,675,390 uniques
 # 2,697,112 obs, 2,675,390 unique
 
 # Normalize diabetes
@@ -92,7 +94,8 @@ Dat <- Dat %>% group_by(USRDS_ID) %>%
   mutate(DIABETES  = normalize_dm(DIABETES)) %>% 
   ungroup() %>% 
   distinct()
-# 2,668,050 obs, 2,674,390 unique
+# 2,742,265 obs, 2,675,390 uniques
+# 2,668,050 obs, 2,675,390 unique
 
 # Normalize country
 # Stuck here now
@@ -100,12 +103,13 @@ Dat <- Dat %>% group_by(USRDS_ID) %>%
   mutate(COUNTRY = normalize_country(COUNTRY)) %>% 
   ungroup() %>% 
   distinct()
+
 # 2,675,392 obs, 2,675,390 unique
 
 #' Individual 732813 has affiliation to both Mexico and PR. I will put this individual in with PR. This is the only 
 #' discrepancy left
 
-Dat[Dat$USRDS_ID==732813,"COUNTRY"] <-  174
+Dat[Dat$USRDS_ID == 732813,"COUNTRY"] <-  174
 Dat <- distinct(Dat)
 # 2,675,390 obs, 2,675,390 unique
 
