@@ -58,21 +58,20 @@ non_uniques %>% select(-USRDS_ID) %>% summarise_all(funs(sum(. > 1, na.rm=T))) %
 #' median BMI over observations. We will also normalize the dichotomous variables to keep the modal value over the 
 #' observations 
 
+# Dat_id <- Dat %>% nest(-USRDS_ID)
+Dat_grp <- Dat %>% group_by(USRDS_ID)
+
 # Fixing BMI
-Dat <- Dat %>% group_by(USRDS_ID) %>% 
-  mutate(BMI2 = median(BMI, na.rm = T)) %>% ungroup() %>% 
-  mutate(BMI = ifelse(is.na(BMI), BMI2, BMI)) %>% # median imputation
-  select(-BMI2) %>% 
-  distinct()
-# 2,800,638 obs, 2,675,390 uniques after imputing just missing BMI values
+Dat_grp <- Dat_grp %>% mutate(BMI = median(BMI, na.rm = T)) %>% distinct()
 ## 2,783,664 obs, 2,675,390 uniques
+
 
 # Normalzing dichotomous variables
 
-Dat <- Dat %>% group_by(USRDS_ID) %>% 
+Dat_grp <- Dat_grp %>% 
   mutate_at(vars(Cancer:Smoke), normalize_dichot) %>% 
-  ungroup() %>% 
   distinct()
+counts(Dat)
 # 2,781,281 obs, 2,675,390 uniques
 # 2,734,641 obs, 2,675,390 unique
 
@@ -94,6 +93,7 @@ Dat <- Dat %>% group_by(USRDS_ID) %>%
   mutate(DIABETES  = normalize_dm(DIABETES)) %>% 
   ungroup() %>% 
   distinct()
+saveRDS(Dat,file = 'data/rda/tmp.rds',compress=T)
 # 2,742,265 obs, 2,675,390 uniques
 # 2,668,050 obs, 2,675,390 unique
 
@@ -103,6 +103,7 @@ Dat <- Dat %>% group_by(USRDS_ID) %>%
   mutate(COUNTRY = normalize_country(COUNTRY)) %>% 
   ungroup() %>% 
   distinct()
+saveRDS(Dat,file = 'data/rda/tmp.rds',compress=T)
 
 # 2,675,392 obs, 2,675,390 unique
 

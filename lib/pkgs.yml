@@ -6,11 +6,9 @@
 - survival
 - broom
 - RSQLite
-- MonetDBLite
 - reshape2
 - cowplot
 - cmprsk
 - rmarkdown
 - haven
-- git2r
 
