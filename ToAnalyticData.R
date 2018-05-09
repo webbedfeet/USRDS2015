@@ -1,6 +1,6 @@
 # Creating an analytic dataset from 2015 data
 ProjTemplate::reload()
-dbdir <- verifyPaths()
+dbdir <- verifyPaths(); dir.exists(dbdir)
 sql_conn <- dbConnect(SQLite(),file.path(dbdir,'USRDS.sqlite3'))
 
 P <- tbl(sql_conn, 'patients') %>% 
@@ -37,7 +37,7 @@ Dat <- Dat %>%
          DIABETES = ifelse(dmfail=='Y', 'Y','N'),
          DIABETES = ifelse(DIABETES=='N' & (DIABINS=='Y' | DIABPRIM=='Y'), 'Y', DIABETES)) %>% 
   select(-dmfail, -DIABINS, -DIABPRIM)
-saveRDS(Dat, file = 'data/rda/rawdata.rds')
+saveRDS(Dat, file = 'data/rda/rawdata.rds', compress = TRUE)
 
 # Check why there are duplicates ------------------------------------------
 
@@ -60,10 +60,11 @@ non_uniques %>% select(-USRDS_ID) %>% summarise_all(funs(sum(. > 1, na.rm=T))) %
 
 # Fixing BMI
 Dat <- Dat %>% group_by(USRDS_ID) %>% 
-  mutate(BMI2 = median(BMI, na.rm=T)) %>% ungroup() %>% 
-  mutate(BMI = BMI2) %>% 
+  mutate(BMI2 = median(BMI, na.rm = T)) %>% ungroup() %>% 
+  mutate(BMI = ifelse(is.na(BMI), BMI2, BMI)) %>% # median imputation
   select(-BMI2) %>% 
   distinct()
+# 2,800,638 obs, 2,675,390 uniques
 # 2,783,664 obs, 2,675,390 uniques
 
 # Normalzing dichotomous variables
