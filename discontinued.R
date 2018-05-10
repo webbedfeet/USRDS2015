@@ -15,12 +15,11 @@
 # The IDs with prevalent comorbidities is interrogated in hospitalization.R and
 # stored in data/hospitalization_idss.rds as a list by comorbidity.
 #+ code, echo=F, message=F, warning=F
-source('lib/reload.R'); reload()
+ProjTemplate::reload()
 dbdir15 <- verifyPaths()
-dbdir14 <- verifyPaths(year=2014)
 
-con14 <- dbConnect(SQLite(), file.path(dbdir14, 'PR_db'))
-dat <- tbl(con14, 'AnalyticData')
+con15 <- dbConnect(SQLite(), file.path(dbdir15, 'USRDS.sqlite3'))
+dat <- tbl(con15, 'AnalyticData')
 discontinue_id <- dat %>% filter(cens_type==3) %>% 
   select(USRDS_ID, RACE2, HispGrps) %>% collect() %>% 
   mutate(RACE2 = str_replace(RACE2, 'Nonhispanic ',''))
@@ -74,7 +73,7 @@ print(plt$plot + guides(color = guide_legend(nrow = 2, byrow = T)))
 #' > comorbidities we are looking at. It only gives a binary indicator of presence 
 #' > of the following comorbidities: 
 #+ echo=F
-x <- dbListFields(con14, 'medevid')
+x <- dbListFields(con15, 'medevid')
 x[str_detect(x, 'COMO_')]
 #'
 #' -----
@@ -94,4 +93,4 @@ lapply(hosp_id, function(x){
 
 #'
 #+ echo=FALSE
-dbDisconnect(con14)
+dbDisconnect(con15)
