@@ -72,36 +72,31 @@ Dat_grp <- Dat_grp %>%
   mutate_at(vars(Cancer:Smoke), normalize_dichot) %>% 
   distinct()
 counts(Dat)
-# 2,781,281 obs, 2,675,390 uniques
 # 2,734,641 obs, 2,675,390 unique
 
 # Normalize ethnicity
-Dat <- Dat %>% mutate(ETHN = ifelse(ETHN == '4', NA, ETHN)) %>% 
-  group_by(USRDS_ID) %>% 
+Dat_grp <- Dat_grp %>% mutate(ETHN = ifelse(ETHN == '4', NA, ETHN)) %>% 
+  #group_by(USRDS_ID) %>% 
   mutate(ETHN2 = normalize_ethn(ETHN)) %>% 
-  ungroup() %>% 
+  #ungroup() %>% 
   mutate(ETHN = ETHN2) %>% 
   select(-ETHN2) %>% 
   mutate(ETHN = ifelse(is.na(ETHN), '4', ETHN)) %>% 
   distinct()
-# 2,746,881 obs, 2,675,390 uniques
 # 2,697,112 obs, 2,675,390 unique
 
 # Normalize diabetes
 
-Dat <- Dat %>% group_by(USRDS_ID) %>% 
+Dat_grp <- Dat_grp %>% 
   mutate(DIABETES  = normalize_dm(DIABETES)) %>% 
-  ungroup() %>% 
   distinct()
-saveRDS(Dat,file = 'data/rda/tmp.rds',compress=T)
-# 2,742,265 obs, 2,675,390 uniques
+saveRDS(Dat_grp,file = 'data/rda/tmp.rds',compress=T)
 # 2,668,050 obs, 2,675,390 unique
 
 # Normalize country
 # Stuck here now
-Dat <- Dat %>% group_by(USRDS_ID) %>% 
+Dat_grp <- Dat_grp %>% 
   mutate(COUNTRY = normalize_country(COUNTRY)) %>% 
-  ungroup() %>% 
   distinct()
 saveRDS(Dat,file = 'data/rda/tmp.rds',compress=T)
 
@@ -109,6 +104,8 @@ saveRDS(Dat,file = 'data/rda/tmp.rds',compress=T)
 
 #' Individual 732813 has affiliation to both Mexico and PR. I will put this individual in with PR. This is the only 
 #' discrepancy left
+
+Dat <- Dat_grp %>% ungroup()
 
 Dat[Dat$USRDS_ID == 732813,"COUNTRY"] <-  174
 Dat <- distinct(Dat)
@@ -177,7 +174,7 @@ Dat <- Dat %>% filter(USRDS_ID %notin% ids) %>%
   filter(!is.na(SEX)) %>% 
   mutate(His.Nhis = ifelse(HISPANIC==1, ifelse(!is.na(COUNTRY),2,1),2)) 
 
-# 1,291,001 observations
+# 1,291,001 obs, 1,291,001 uniques
 
 Dat <- Dat %>%   select(USRDS_ID, FIRST_SE, PDIS, RXSTOP, TX1DATE, USA, ZIPCODE, DIALTYPE, DIABETES, DIED, SEX,
          REGION, BMI, COUNTRY, STATE, INC_AGE, RACE, HISPANIC, Cancer:Smoke, His.Nhis)
@@ -223,7 +220,7 @@ saveRDS(Dat, 'data/rda/interim.rds')
 
 # Defining withdrawal from rxhist -------------------------------------------------------------
 
-rxhist <- tbl(sql_conn, 'rxhist60') %>% collect() %>% filter(USRDS_ID %in% Dat$USRDS_ID)
+rxhist <- tbl(sql_conn, 'rxhist60') %>% collect(n = Inf) %>% filter(USRDS_ID %in% Dat$USRDS_ID)
 
 txpattern <- rxhist %>% group_by(USRDS_ID) %>% 
   summarise(tx = paste(RXGROUP, collapse='')) %>% # Create string of treatment pattern
@@ -245,6 +242,7 @@ blah <- rxhist %>% semi_join(txpattern_withdraw, by='USRDS_ID') %>%
 
 Dat <- Dat %>% left_join(blah)
 
+saveRDS(Dat, file = 'data/rda/interim2.rds', compress = T)
 
 # Loss to follow-up and/or recovery of function -----------------------------------------------
 
@@ -274,4 +272,40 @@ crud = rbind(crud_x, crud_z) %>%
 
 Dat <- Dat %>% left_join(crud) %>% 
   mutate(withdraw = ifelse(RXSTOP %in% c('A','C','D','E'),1,0),
-         withdraw_time = ifelse(withdraw==1, pmin(BEGIN_withdraw, DIED - 7)))
+         withdraw_time = ifelse(withdraw==1, pmin(BEGIN_withdraw, as.character(as.Date(DIED) - 7), na.rm = T), 
+                                NA),
+         cens_time = pmin(BEGIN_cens, '2015-01-01', na.rm=T))
+Dat <-  Dat %>% 
+  mutate(cens_time = ifelse(cens_time < FIRST_SE, NA, cens_time),
+         withdraw_time = ifelse(withdraw_time < FIRST_SE, NA, withdraw_time))
+
+
+# Compute survival times --------------------------------------------------
+
+Dat <- Dat %>% 
+  mutate_at(vars(DIED, FIRST_SE, TX1DATE, cens_time, withdraw_time), as.Date) %>% 
+  mutate(
+  toc = (cens_time - FIRST_SE)/365.25, # Censoring
+  tod = (DIED - FIRST_SE)/365.25, # Death
+  tot = (TX1DATE - FIRST_SE)/365.25,  # Transplant
+  tow = (withdraw_time - FIRST_SE)/365.25) %>% # Withdrawal
+  # select(USRDS_ID, toc, tod, tot, tow) %>% 
+  mutate_at(vars(toc:tow), function(x) ifelse(x < 0, NA, x)) %>% 
+  mutate(surv_time = pmin(toc, tod, tot, tow, na.rm=T)) %>% 
+  mutate(cens_type = case_when(toc == surv_time ~ 0, tod == surv_time ~ 1, tot == surv_time ~ 2, tow == surv_time ~ 3))
+
+
+# Add zscore --------------------------------------------------------------
+
+zipses <- haven::read_sas(file.path(dbdir,'2015 Core', 'core','zipses1.sas7bdat'))
+Dat <- Dat %>% left_join(zipses, by=c('ZIPCODE' = 'zipcode'))
+
+saveRDS(Dat, file = 'data/rda/Analytic.rds', compress = T)
+
+
+# Save into SQLite --------------------------------------------------------
+
+dbWriteTable(sql_conn, 'zipses', zipses)
+dbWriteTable(sql_conn, 'AnalyticData', Dat)
+
+dbDisconnect(sql_conn)
