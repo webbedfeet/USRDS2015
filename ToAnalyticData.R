@@ -190,7 +190,7 @@ Dat <- Dat %>% mutate(RACE = ifelse(RACE=='9','5', RACE)) %>%
     RACE == '3' ~ 'Black',
     RACE =='4' ~ 'White',
     RACE == '5' ~ 'Other')) %>% 
-  mutate(RACE2 = ifelse(HISPANIC==1, 'Hispanic', RACE))
+  mutate(RACE2 = ifelse(HISPANIC==1, 'Hispanic', RACE2))
 
 Dat <- Dat %>% mutate(AGEGRP = cut(INC_AGE, c(18, 29,39,49,59,69,100), include.lowest = T))
 
@@ -307,5 +307,8 @@ saveRDS(Dat, file = 'data/rda/Analytic.rds', compress = T)
 
 dbWriteTable(sql_conn, 'zipses', zipses)
 dbWriteTable(sql_conn, 'AnalyticData', Dat)
+
+studyids <- Dat %>% select(USRDS_ID)
+dbWriteTable(sql_conn, 'StudyIDs', studyids, overwrite=TRUE)
 
 dbDisconnect(sql_conn)
