@@ -213,7 +213,7 @@ Dat <- Dat %>%
          HispUnk = ifelse (HISPANIC == 1 & is.na(COUNTRY), 4,0)) %>% 
   mutate(HispGrps = HispPR + HispUS + HispNon + HispUnk) %>% 
   mutate(HispGrps = ifelse(HispSubgrp == 1, HispGrps, NA)) %>% 
-  mutate(HispGrps = factor(HispGrps, labels = c('HispPR','NonHispWh','HispOther', 'HispUnknown')))
+  mutate(HispGrps = factor(HispGrps, labels = c('Nonhispanic White','HispPR','HispUS','HispOther', 'HispUnknown')))
 
 saveRDS(Dat, 'data/rda/interim.rds')
 
@@ -305,8 +305,8 @@ saveRDS(Dat, file = 'data/rda/Analytic.rds', compress = T)
 
 # Save into SQLite --------------------------------------------------------
 
-dbWriteTable(sql_conn, 'zipses', zipses)
-dbWriteTable(sql_conn, 'AnalyticData', Dat)
+dbWriteTable(sql_conn, 'zipses', zipses, overwrite=T)
+dbWriteTable(sql_conn, 'AnalyticData', Dat, overwrite=T)
 
 studyids <- Dat %>% select(USRDS_ID)
 dbWriteTable(sql_conn, 'StudyIDs', studyids, overwrite=TRUE)
