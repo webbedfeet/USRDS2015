@@ -301,14 +301,15 @@ zipses <- haven::read_sas(file.path(dbdir,'2015 Core', 'core','zipses1.sas7bdat'
 Dat <- Dat %>% left_join(zipses, by=c('ZIPCODE' = 'zipcode'))
 
 saveRDS(Dat, file = 'data/rda/Analytic.rds', compress = T)
+# saveRDS(Dat, file = file.path(ProjTemplate::find_dropbox(),'NIAMS','Ward','USRDS2915','data','Analytic.rds'))
 
 
 # Save into SQLite --------------------------------------------------------
 
-dbWriteTable(sql_conn, 'zipses', zipses, overwrite=T)
-dbWriteTable(sql_conn, 'AnalyticData', Dat, overwrite=T)
+dbWriteTable(sql_conn, 'zipses', zipses, overwrite = T)
+dbWriteTable(sql_conn, 'AnalyticData', Dat, overwrite = T)
 
 studyids <- Dat %>% select(USRDS_ID)
-dbWriteTable(sql_conn, 'StudyIDs', studyids, overwrite=TRUE)
+dbWriteTable(sql_conn, 'StudyIDs', studyids, overwrite = TRUE)
 
 dbDisconnect(sql_conn)

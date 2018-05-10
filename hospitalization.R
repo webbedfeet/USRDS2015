@@ -97,19 +97,22 @@ sqlist <- list(sql1,sql2)
 
 
 dement <- list()
+i=0
 for (sql in sqlist){
   rs <- dbSendQuery(sql_conn, sql)
   while(!dbHasCompleted(rs)){
-    d <-  dbFetch(rs, n = 10000)
-    dement <-  c(dement, d %>% gather(hsdiag, code, -USRDS_ID, -CLM_FROM, -CLM_THRU) %>%
+    d <-  dbFetch(rs, n = 100000)
+    i=i+1
+    print(i)
+    dement[[i]] <-d %>% gather(hsdiag, code, -USRDS_ID, -CLM_FROM, -CLM_THRU) %>%
                    filter(str_detect(code, '^290|^2941|^331[012]')) %>%
                    select(USRDS_ID, CLM_FROM, CLM_THRU) %>%
-                   distinct() %>% inner_join(StudyIDS) %>% as.data.frame())
+                   # distinct() %>% inner_join(StudyIDS) %>% 
+                   as.data.frame()
   }
   dbClearResult(rs)
 }
 
-dement <- data.frame(USRDS_ID = sort(unique(unlist(dement))))
 
 # Failure to thrive -------------------
 ## This can appear in any of the diagnoses
@@ -123,11 +126,14 @@ sql2 <- paste(capture.output(from2010 %>%
 sqlist <- list(sql1,sql2)
 
 thrive = list()
+i = 0
 for (sql in sqlist) {
   rs <- dbSendQuery(sql_conn, sql)
   while (!dbHasCompleted(rs)) {
-    d <- dbFetch(rs, n = 10000)
-    thrive <- c(thrive,
+    d <- dbFetch(rs, n = 100000)
+    i = i+1
+    print(i)
+    thrive[[i]] <- c(thrive,
                 d %>% gather(hsdiag, code, -USRDS_ID) %>%
                   filter(str_detect(code, '783[237]')) %>%
                   select(USRDS_ID) %>%
@@ -135,7 +141,6 @@ for (sql in sqlist) {
   }
   dbClearResult(rs)
 }
-thrive <- data.frame(USRDS_ID = sort(unique(unlist(thrive))))
 
 dbDisconnect(sql_conn); gc()
 
