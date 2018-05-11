@@ -164,6 +164,38 @@ saveRDS(hospitalization, file = file.path(dropdir, 'hospitalization_ids.rds'))
 dbDisconnect(sql_conn); gc()
 
 
+# Extract last event for each person --------------------------------------
+
+hospitalization <- readRDS('data/hospitalization_ids.rds')
+
+hosp_last <- map(hospitalization, ~.x %>% group_by(USRDS_ID) %>% 
+                   top_n(-1, CLM_FROM) %>% 
+                   top_n(-1, CLM_THRU) %>% 
+                   ungroup() %>% 
+                   distinct())
+
+hosp_last %>% map_int(nrow)
+
+
+# Ingest analytic data ----------------------------------------------------
+
+Dat <- readRDS('data/rda/Analytic.rds')
+library(rms)
+
+Dat <- Dat %>% mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
+
+mods1 <- map(hosp_last, ~Dat %>% semi_join(.x) %>% 
+               filter(cens_type %in% c(0,3)) %>%  # Avoid cause-specific hazard by filtering
+              coxph(Surv(surv_time, cens_type==3) ~AGEGRP + SEX + RACE2 + rcs(zscore), data=.))
+res1 <- map(mods1, ~ confint(.) %>% exp() %>% as.data.frame() %>% rownames_to_column('variable') %>% 
+              filter(str_detect(variable, 'RACE2')) %>% mutate(variable = str_remove(variable, "RACE2")))
+res2 <- map(mods1, ~summary(.x)$coef %>% as.data.frame() %>% rownames_to_column('variable') %>% 
+              filter(str_detect(variable, 'RACE2')) %>% select(variable,`exp(coef)`) %>% 
+              mutate(variable = str_remove(variable, 'RACE2')) %>% 
+              rename('Estimate' = `exp(coef)`))
+results = map2(res2, res1, left_join, by='variable')
+
+map(hosp_last, ~ Dat %>% semi_join(.x) %>% filter(cens_type %in% c(0,3))) %>% map_int(nrow)
 # Verifying incident cases from medevid ------------------------------------
 
 ## CVATIA, CVA = stroke
