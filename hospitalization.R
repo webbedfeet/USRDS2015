@@ -195,7 +195,9 @@ res2 <- map(mods1, ~summary(.x)$coef %>% as.data.frame() %>% rownames_to_column(
               rename('Estimate' = `exp(coef)`))
 results = map2(res2, res1, left_join, by='variable')
 
-map(hosp_last, ~ Dat %>% semi_join(.x) %>% filter(cens_type %in% c(0,3))) %>% map_int(nrow)
+# TODO: Count time from last comorbidity date
+# TODO: Figure out which analysis makes the most sense
+
 # Verifying incident cases from medevid ------------------------------------
 
 ## CVATIA, CVA = stroke
