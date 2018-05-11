@@ -74,6 +74,15 @@ MetsCa <- dbs %>%
   bind_rows() %>%
   distinct() %>% mutate(dt = date_midpt(CLM_FROM, CLM_THRU))
 head(MetsCa)
+
+hospitalization <- list('stroke_primary' = stroke_primary,
+                        'stroke_compl' = stroke_compl,
+                        'LuCa' = LuCa,
+                        'MetsCa' = MetsCa)
+                        # 'dement' = dement,
+                        # 'thrive' = thrive
+saveRDS(hospitalization, file = 'data/hospitalization_ids.rds', compress = T)
+
 # Dementia ----------------------------------------------------------------
 
 ## I'm moving this to Python since it's much faster at processing the database
@@ -113,6 +122,11 @@ for (sql in sqlist){
   dbClearResult(rs)
 }
 
+dement1 <- bind_rows(dement)
+dement1 <- dement1 %>% semi_join(StudyIDS)
+
+hospitalization[['dement']] <- dement1
+saveRDS(hospitalization, file = 'data/hospitalization_ids.rds', compress = T)
 
 # Failure to thrive -------------------
 ## This can appear in any of the diagnoses
@@ -141,6 +155,9 @@ for (sql in sqlist) {
   }
   dbClearResult(rs)
 }
+
+thrive1 <- bind_rows(thrive) %>% semi_join(StudyIDS)
+
 
 dbDisconnect(sql_conn); gc()
 
