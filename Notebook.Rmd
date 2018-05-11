@@ -149,3 +149,9 @@ D    | Death
 T    | Transplant
 X    | Lost to followup
 Z    | Recovered Function
+
+
+## Hospitalization analysis
+
+We find that the overall cause-specific hazard of discontinuation is lower among racial groups than whites.
+TODO: Count time since last comorbidity event

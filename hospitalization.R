@@ -158,31 +158,82 @@ for (sql in sqlist) {
 
 thrive1 <- bind_rows(thrive) %>% semi_join(StudyIDS)
 hospitalization[['thrive']] <- thrive1
+
+
 saveRDS(hospitalization, file = 'data/hospitalization_ids.rds')
 saveRDS(hospitalization, file = file.path(dropdir, 'hospitalization_ids.rds'))
 
 dbDisconnect(sql_conn); gc()
 
 
-# Extract last event for each person --------------------------------------
+
+# Filter index conditions by events after start of dialysis -----------------------------------
+# IDEA: We could also look at individuals who had index condition soon followed by dialysis,
+# where dialysis is the precipitating index condition
 
 hospitalization <- readRDS('data/hospitalization_ids.rds')
-
-hosp_last <- map(hospitalization, ~.x %>% group_by(USRDS_ID) %>% 
-                   top_n(-1, CLM_FROM) %>% 
-                   top_n(-1, CLM_THRU) %>% 
-                   ungroup() %>% 
-                   distinct())
-
-hosp_last %>% map_int(nrow)
-
-
-# Ingest analytic data ----------------------------------------------------
-
 Dat <- readRDS('data/rda/Analytic.rds')
-library(rms)
+Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>% 
+  mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
 
-Dat <- Dat %>% mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
+hosp_post_dx <- 
+  map(hospitalization, ~ .x %>% 
+        mutate(CLM_FROM = as.Date(CLM_FROM)) %>% 
+        left_join(Dat %>% select(USRDS_ID, FIRST_SE, surv_date, cens_type, RACE2)) %>% 
+        filter(CLM_FROM >= FIRST_SE, CLM_FROM <= surv_date) %>% 
+        group_by(USRDS_ID) %>% 
+        top_n(-1, CLM_FROM) %>% 
+        top_n(-1, CLM_THRU) %>% 
+        # select(-FIRST_SE, -surv_date) %>% 
+        distinct() %>% 
+        ungroup())
+
+
+
+# Propensity of withdrawal based on timing of Comorb ------------------------------------------
+
+#' what's the chance of discontinuation, by race
+
+map(hosp_post_dx, ~.x %>% group_by(RACE2) %>% summarise(prop_withdrew = mean(cens_type==3))) %>% 
+  bind_rows(.id='index_condition') %>% 
+  filter(!is.na(RACE2)) %>% 
+  mutate(index_condition = case_when(
+    index_condition=='stroke_primary'~ 'Primary stroke',
+    index_condition=='stroke_compl' ~ 'Stroke with complications',
+    index_condition == 'dement' ~ 'Dementia',
+    index_condition == 'thrive' ~ 'Failure to thrive',
+    index_condition == 'LuCa' ~ 'Lung cancer',
+    index_condition == 'MetsCa' ~ 'Metastatic cancer'
+  )) %>% 
+  mutate(prop_withdrew = round(prop_withdrew,3)) %>% 
+  knitr::kable() 
+
+#' By race and age (but wait, this is age at dialysis start, not age at event)
+map(hosp_post_dx, ~.x %>% left_join(Dat %>% select(USRDS_ID, INC_AGE)) %>% 
+      mutate(se_to_event_time = CLM_FROM - FIRST_SE,
+             age_at_event = floor(INC_AGE + se_to_event_time/365.25))  %>% 
+      mutate(agegrp_at_event = cut_width(age_at_event, width=10, boundary=10, closed='left')) %>% 
+      mutate(agegrp_at_event = 
+               forcats::fct_collapse(agegrp_at_event,
+                                     c('<40' = intersect(levels(agegrp_at_event),c('[10,20)','[20,30)','[30,40)')),
+                                                       '80+' = intercseci('[80,90)','[90,100)','[100,110]')
+                                                       %>% 
+      group_by(agegrp_at_event, RACE2) %>% 
+      summarise(prop_withdrew = round(mean(cens_type==3),3), N = n())) %>% 
+  bind_rows(.id = 'index_condition') %>% 
+  unite(output, c('prop_withdrew','N'), sep='/') %>% 
+  spread(agegrp_at_event, output) %>% 
+  filter(!is.na(RACE2)) -> output
+
+# Median time after index condition to discontinuation ----------------------------------------
+
+map(hosp_post_dx, ~.x %>% filter(cens_type==3) %>% 
+      mutate(time_to_wd = surv_date - CLM_FROM) %>% 
+      group_by(RACE2) %>% 
+      summarise(median_time = median(time_to_wd, na.rm=T))) %>% 
+  bind_rows(.id = 'index_condition') %>% 
+  filter(!is.na(RACE2)) %>% 
+  knitr::kable()
 
 mods1 <- map(hosp_last, ~Dat %>% semi_join(.x) %>% 
                filter(cens_type %in% c(0,3)) %>%  # Avoid cause-specific hazard by filtering
