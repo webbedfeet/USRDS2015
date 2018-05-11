@@ -13,6 +13,7 @@
 
 ProjTemplate::reload()
 dbdir = verifyPaths()
+dropdir <- file.path(ProjTemplate::find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
 sql_conn = dbConnect(SQLite(), file.path(dbdir,'USRDS.sqlite3'))
 
 till2009 <- tbl(sql_conn, 'till2009')
@@ -147,8 +148,7 @@ for (sql in sqlist) {
     d <- dbFetch(rs, n = 100000)
     i = i+1
     print(i)
-    thrive[[i]] <- c(thrive,
-                d %>% gather(hsdiag, code, starts_with("HSDIAG")) %>%
+    thrive[[i]] <-d %>% gather(hsdiag, code, starts_with("HSDIAG")) %>%
                   filter(str_detect(code, '783[237]')) %>%
                   select(USRDS_ID, CLM_FROM, CLM_THRU) %>%
   				  as.data.frame()
@@ -157,17 +157,11 @@ for (sql in sqlist) {
 }
 
 thrive1 <- bind_rows(thrive) %>% semi_join(StudyIDS)
-
+hospitalization[['thrive']] <- thrive1
+saveRDS(hospitalization, file = 'data/hospitalization_ids.rds')
+saveRDS(hospitalization, file = file.path(dropdir, 'hospitalization_ids.rds'))
 
 dbDisconnect(sql_conn); gc()
-
-hospitalization <- list('stroke_primary' = stroke_primary,
-                        'stroke_compl' = stroke_compl,
-                        'LuCa' = LuCa,
-                        'MetsCa' = MetsCa,
-                        'dement' = dement,
-                        'thrive' = thrive)
-saveRDS(hospitalization, file = 'data/hospitalization_ids.rds')
 
 
 # Verifying incident cases from medevid ------------------------------------
