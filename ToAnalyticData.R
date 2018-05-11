@@ -270,6 +270,7 @@ crud = rbind(crud_x, crud_z) %>%
   mutate(BEGIN_cens = BEGDATE) %>% 
   select(USRDS_ID, BEGIN_cens)
 
+# TODO: Fix withdraw time so it gets died-7 only if BEGIN_withdraw is missing.
 Dat <- Dat %>% left_join(crud) %>% 
   mutate(withdraw = ifelse(RXSTOP %in% c('A','C','D','E'),1,0),
          withdraw_time = ifelse(withdraw==1, pmin(BEGIN_withdraw, as.character(as.Date(DIED) - 7), na.rm = T), 
