@@ -132,10 +132,10 @@ saveRDS(hospitalization, file = 'data/hospitalization_ids.rds', compress = T)
 ## This can appear in any of the diagnoses
 
 sql1 <- paste(capture.output(till2009 %>%
-                               select(USRDS_ID, starts_with('HSDIAG')) %>%
+                               select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU) %>%
                          show_query(), type='message')[-1], collapse=' ')
 sql2 <- paste(capture.output(from2010 %>%
-                               select(USRDS_ID, starts_with('HSDIAG')) %>%
+                               select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU) %>%
                                show_query(), type='message')[-1], collapse=' ')
 sqlist <- list(sql1,sql2)
 
@@ -148,10 +148,10 @@ for (sql in sqlist) {
     i = i+1
     print(i)
     thrive[[i]] <- c(thrive,
-                d %>% gather(hsdiag, code, -USRDS_ID) %>%
+                d %>% gather(hsdiag, code, starts_with("HSDIAG")) %>%
                   filter(str_detect(code, '783[237]')) %>%
-                  select(USRDS_ID) %>%
-                  distinct())
+                  select(USRDS_ID, CLM_FROM, CLM_THRU) %>%
+  				  as.data.frame()
   }
   dbClearResult(rs)
 }
