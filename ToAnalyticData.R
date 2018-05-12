@@ -1,6 +1,16 @@
 # Creating an analytic dataset from 2015 data
+
+
+# Setup ---------------------------------------------------------------------------------------
+
 ProjTemplate::reload()
 dbdir <- verifyPaths(); dir.exists(dbdir)
+dropdir <- file.path(ProjTemplate::find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
+
+
+# Extract from DB -----------------------------------------------------------------------------
+
+
 sql_conn <- dbConnect(SQLite(),file.path(dbdir,'USRDS.sqlite3'))
 
 P <- tbl(sql_conn, 'patients') %>% 
@@ -270,12 +280,13 @@ crud = rbind(crud_x, crud_z) %>%
   mutate(BEGIN_cens = BEGDATE) %>% 
   select(USRDS_ID, BEGIN_cens)
 
-# TODO: Fix withdraw time so it gets died-7 only if BEGIN_withdraw is missing.
 Dat <- Dat %>% left_join(crud) %>% 
   mutate(withdraw = ifelse(RXSTOP %in% c('A','C','D','E'),1,0),
-         withdraw_time = ifelse(withdraw==1, pmin(BEGIN_withdraw, as.character(as.Date(DIED) - 7), na.rm = T), 
-                                NA),
-         cens_time = pmin(BEGIN_cens, '2015-01-01', na.rm=T))
+         withdraw_time = case_when(
+           withdraw==1 & is.na(BEGIN_withdraw) ~ as.character(as.Date(DIED) - 7),
+           withdraw == 1 & !is.na(BEGIN_withdraw) ~ BEGIN_withdraw,
+           TRUE ~ NA),
+          cens_time = pmin(BEGIN_cens, '2015-01-01', na.rm=T))
 Dat <-  Dat %>% 
   mutate(cens_time = ifelse(cens_time < FIRST_SE, NA, cens_time),
          withdraw_time = ifelse(withdraw_time < FIRST_SE, NA, withdraw_time))
