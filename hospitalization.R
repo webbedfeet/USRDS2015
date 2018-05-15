@@ -308,29 +308,64 @@ bind_rows(hosp_coxph, .id = 'index_event') %>%
     geom_hline(yintercept = 1, linetype =3)+
     facet_wrap(~index_event, nrow=2) +
     theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-    scale_y_continuous('HR for discontinuation, compared to Whites', breaks = seq(0.4,1.4, by = 0.2))
+    scale_y_continuous('HR for discontinuation, compared to Whites', breaks = seq(0.4,1.4, by = 0.2))+
+    labs(x = '') +
+    ggsave('ForestPlot.pdf')
 
+bind_rows(hosp_coxph, .id = 'Index event') %>% 
+  openxlsx::write.xlsx('CoxPH.xlsx')
 
 # TODO: Figure out which analysis makes the most sense
+
+
+# Evaluating how long from discontinuation to death -------------------------------------------
+
+ProjTemplate::reload()
+hospitalization <- readRDS('data/hospitalization_ids.rds')
+Dat <- readRDS('data/rda/Analytic.rds')
+Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>% 
+  mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
+
+Dat <- Dat %>% 
+  mutate(withdraw_to_death = ifelse(cens_type==3 & !is.na(BEGIN_withdraw),
+                                    tod - tow, NA))
+Dat %>% filter(RACE2 != 'Other') %>% ggplot(aes(x = RACE2, y = withdraw_to_death))+geom_boxplot()
+Dat %>% filter(RACE2 != 'Other', cens_type==3) %>% 
+  kruskal.test(withdraw_to_death~RACE2, data=.) %>% 
+  broom::tidy()
+Dat %>% filter(RACE2 != 'Other', cens_type == 3) %>% 
+  ggplot(aes(x = withdraw_to_death*365.25))+
+    geom_density(aes(group = RACE2, color = RACE2)) +
+    xlim(0,100)
+Dat %>% filter(RACE2 != 'Other', cens_type == 3) %>% 
+  group_by(RACE2) %>% 
+  summarise(med_surv = median(365*withdraw_to_death, na.rm=T))
+
+# TODO: Sensitivity of all results to imputation of withdrawal time
+# This means, we assumed, if withdrawal data is missing, that we used 7 days before death. 
+# We should see how our results hold up if we impute the withdrawal date as 
+# (a) the date of death
+# (b) randomly drawn from race-specific distribution
+
 
 # Verifying incident cases from medevid ------------------------------------
 
 ## CVATIA, CVA = stroke
 ## CANC = cancer
 
-sql_conn <- dbConnect(SQLite(), file.path(dbdir, 'USRDS.sqlite3'))
-medevid <- tbl(sql_conn, 'medevid')
-studyids <- tbl(sql_conn, 'StudyIDs')
-medevid %>% inner_join(studyids) %>% count()
-joined_tbl <- medevid %>% inner_join(studyids)
-
-bl <- medevid %>% inner_join(studyids) %>% collect(n=5) # Exploration
-
-## CANCER and COMO_CANC are identical as are CVA and COMO_CVATIA. So you need only one
-bl2 <- joined_tbl %>% select(USRDS_ID, CVA,  CANCER,  CTDATE, DIALDAT, DIALEDT, DIED) %>%
-  collect(n=Inf) %>%
-  filter(CVA != '') # Same individuals are missing CVA and CANCER
-bl2 <- bl2 %>%
-  group_by(USRDS_ID) %>%
-  top_n(-1, DIALDAT) %>% # Take the earliest dialysis date
-  ungroup()
+# sql_conn <- dbConnect(SQLite(), file.path(dbdir, 'USRDS.sqlite3'))
+# medevid <- tbl(sql_conn, 'medevid')
+# studyids <- tbl(sql_conn, 'StudyIDs')
+# medevid %>% inner_join(studyids) %>% count()
+# joined_tbl <- medevid %>% inner_join(studyids)
+# 
+# bl <- medevid %>% inner_join(studyids) %>% collect(n=5) # Exploration
+# 
+# ## CANCER and COMO_CANC are identical as are CVA and COMO_CVATIA. So you need only one
+# bl2 <- joined_tbl %>% select(USRDS_ID, CVA,  CANCER,  CTDATE, DIALDAT, DIALEDT, DIED) %>%
+#   collect(n=Inf) %>%
+#   filter(CVA != '') # Same individuals are missing CVA and CANCER
+# bl2 <- bl2 %>%
+#   group_by(USRDS_ID) %>%
+#   top_n(-1, DIALDAT) %>% # Take the earliest dialysis date
+#   ungroup()
