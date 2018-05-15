@@ -11,9 +11,16 @@
 ##%######################################################%##
 
 
+# setup ---------------------------------------------------------------------------------------
+
+
 ProjTemplate::reload()
 dbdir = verifyPaths()
 dropdir <- file.path(ProjTemplate::find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
+
+# extract data from DB ------------------------------------------------------------------------
+
+
 sql_conn = dbConnect(SQLite(), file.path(dbdir,'USRDS.sqlite3'))
 
 till2009 <- tbl(sql_conn, 'till2009')
@@ -171,6 +178,7 @@ dbDisconnect(sql_conn); gc()
 # IDEA: We could also look at individuals who had index condition soon followed by dialysis,
 # where dialysis is the precipitating index condition
 
+ProjTemplate::reload()
 hospitalization <- readRDS('data/hospitalization_ids.rds')
 Dat <- readRDS('data/rda/Analytic.rds')
 Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>% 
@@ -205,8 +213,6 @@ hosp_postdx_age <- map(
                                    '<40' = intersect(levels(agegrp_at_event),c('[10,20)','[20,30)','[30,40)')),
                                    '80+' = intersect(levels(agegrp_at_event),
                                                      c('[80,90)','[90,100)','[90,100]','[100,110]')))))
-    # mutate(agegrp_at_event = factor(agegrp_at_event,
-                         # levels = c('<40','[40,50)','[50,60)','[60,70)','[70,80)','80+'))) %>% )
 
 out1 <- map(hosp_postdx_age, ~.x %>% 
       group_by(agegrp_at_event, RACE2) %>% 
@@ -223,7 +229,7 @@ out2 <- map(hosp_post_dx, ~.x %>% group_by(RACE2) %>% summarise(prop_withdrew = 
                                                         N = n())) %>% 
   bind_rows(.id='index_condition') %>% 
   filter(!is.na(RACE2)) %>% 
-  mutate(index_condition = tranform_indx(index_condition)) %>% 
+  mutate(index_condition = transform_indx(index_condition)) %>% 
   mutate(prop_withdrew = round(prop_withdrew,3)) %>% 
   unite(Overall, c('prop_withdrew', 'N'), sep = ' / ')
 
@@ -235,7 +241,7 @@ openxlsx::write.xlsx(out, file='Withdrawal_age_race.xlsx')
 # Median time after index condition to discontinuation ----------------------------------------
 
 map(hosp_postdx_age, ~.x %>% 
-      mutate(time_to_wd = as.numeric(surv_date - CLM_FROM)) %>% 
+      mutate(time_to_wd = as.numeric(surv_date - CLM_FROM)) %>% # time between dialysis and withdrawal
       group_by(agegrp_at_event, RACE2) %>% 
       summarise(median_time = median(time_to_wd, na.rm=T))) %>% 
   bind_rows(.id = 'index_condition') %>% 
@@ -250,19 +256,61 @@ map(hosp_postdx_age, ~.x %>%
 
 # Cox regressions -----------------------------------------------------------------------------
 
+## Cox regression from time of even to time of withdrawal, as a cause-specific hazard estimation
+## problem
 
-mods1 <- map(hosp_last, ~Dat %>% semi_join(.x) %>% 
-               filter(cens_type %in% c(0,3)) %>%  # Avoid cause-specific hazard by filtering
-              coxph(Surv(surv_time, cens_type==3) ~AGEGRP + SEX + RACE2 + rcs(zscore), data=.))
-res1 <- map(mods1, ~ confint(.) %>% exp() %>% as.data.frame() %>% rownames_to_column('variable') %>% 
-              filter(str_detect(variable, 'RACE2')) %>% mutate(variable = str_remove(variable, "RACE2")))
-res2 <- map(mods1, ~summary(.x)$coef %>% as.data.frame() %>% rownames_to_column('variable') %>% 
-              filter(str_detect(variable, 'RACE2')) %>% select(variable,`exp(coef)`) %>% 
-              mutate(variable = str_remove(variable, 'RACE2')) %>% 
-              rename('Estimate' = `exp(coef)`))
-results = map2(res2, res1, left_join, by='variable')
+hosp_cox_data <- 
+  map(hosp_postdx_age, ~.x %>% 
+        left_join(select(Dat,  SEX, zscore, USRDS_ID)) %>% 
+        mutate(time_from_event = as.numeric(surv_date-CLM_FROM)) %>% 
+        mutate(time_on_dialysis = se_to_event_time) %>% 
+        rename('Race' = "RACE2") %>% 
+        filter(Race != 'Other') %>% 
+        mutate(Race = droplevels(Race)))
 
-# TODO: Count time from last comorbidity date
+names(hosp_cox_data) <- c('Primary stroke','Stroke with complications',
+                          'Lung Cancer','Metastatic Cancer',
+                          'Dementia','Failure to thrive')
+## Kaplan Meier curves
+
+fit_list = map(hosp_cox_data, ~survfit(Surv(time_from_event, cens_type==3)~ Race, 
+                                       data = .))
+cph1_list <-  map(hosp_cox_data, ~ coxph(Surv(time_from_event, cens_type==3)~ Race, 
+                                         data = .))
+logrank_list <- map(cph1_list, ~format.pval(anova(.)[2,4], eps=1e-6))
+plt_list <- vector('list',6)
+for(i in 1:6){
+  plt_list[[i]] <- survMisc::autoplot(fit_list[[i]], type='single', censSize = 0,
+                                      title = names(fit_list)[i],
+                                      xLab = 'Days from index event',
+                                      legTitle = '')$plot +
+    scale_y_continuous('Percent who discontinued dialysis', labels = scales::percent)+
+    annotate('text', x = 50, y = 0.1, label=paste0('p-value : ', logrank_list[[i]]),hjust=0) +
+    theme(legend.position = 'bottom', legend.justification = c(0.5, 0.5))
+}
+
+pdf('KaplanMeierPlots.pdf')
+for(i in 1:6) print(plt_list[[i]])
+dev.off()
+
+#'  Cox regressions adjusting for age at event, gender, race, z-score and time on dialysis at time of event
+hosp_coxph <- map(hosp_cox_data,
+                  ~ coxph(Surv(time_from_event, cens_type==3)~Race + agegrp_at_event + SEX + zscore + 
+                            time_on_dialysis, data = .) %>% 
+                    broom::tidy() %>% 
+                    filter(str_detect(term, 'Race')) %>% 
+                    select(term, estimate, p.value:conf.high) %>% 
+                    mutate(term = str_remove(term, 'Race')) %>% 
+                    mutate_at(vars(estimate, conf.low:conf.high), exp))
+bind_rows(hosp_coxph, .id = 'index_event') %>% 
+  ggplot(aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high))+
+    geom_pointrange() + 
+    geom_hline(yintercept = 1, linetype =3)+
+    facet_wrap(~index_event, nrow=2) +
+    theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+    scale_y_continuous('HR for discontinuation, compared to Whites', breaks = seq(0.4,1.4, by = 0.2))
+
+
 # TODO: Figure out which analysis makes the most sense
 
 # Verifying incident cases from medevid ------------------------------------
