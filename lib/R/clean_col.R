@@ -17,6 +17,6 @@ clean_col <- function(x, colvar){
   require(dplyr)
   colv <- enquo(colvar)
   x %>% group_by(!!colv) %>% mutate(rown = row_number()) %>% ungroup() %>% 
-    mutate_at(vars(!!colv), funs(ifelse(rown > 1, NA, .))) %>% 
+    mutate_at(vars(!!colv), funs(ifelse(rown > 1, '', .))) %>% 
     select (-rown)
 }
