@@ -1,6 +1,16 @@
 # Creating an analytic dataset from 2015 data
+
+
+# Setup ---------------------------------------------------------------------------------------
+
 ProjTemplate::reload()
 dbdir <- verifyPaths(); dir.exists(dbdir)
+dropdir <- file.path(ProjTemplate::find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
+
+
+# Extract from DB -----------------------------------------------------------------------------
+
+
 sql_conn <- dbConnect(SQLite(),file.path(dbdir,'USRDS.sqlite3'))
 
 P <- tbl(sql_conn, 'patients') %>% 
@@ -52,7 +62,7 @@ multiple_row_ids <- Dat %>% count(USRDS_ID) %>%
   dplyr::pull(USRDS_ID)
 non_uniques <- Dat %>% filter(USRDS_ID %in% multiple_row_ids) %>% 
   group_by(USRDS_ID) %>% summarise_all(funs(length(unique(.)))) %>% ungroup()
-non_uniques %>% select(-USRDS_ID) %>% summarise_all(funs(sum(. > 1, na.rm=T))) %>% View()
+#non_uniques %>% select(-USRDS_ID) %>% summarise_all(funs(sum(. > 1, na.rm=T))) %>% View()
 
 #' BMI is missing in most, and does change with exam, possibly. We will first replace all available BMI recordings with their 
 #' median BMI over observations. We will also normalize the dichotomous variables to keep the modal value over the 
@@ -131,7 +141,7 @@ saveRDS(Dat, file = 'data/rda/normalizedData.rds')
 
 # Missing value imputation ------------------------------------------------
 
-Dat %>% summarise_all(funs(100*mean(is.na(.)))) %>% View()
+#Dat %>% summarise_all(funs(100*mean(is.na(.)))) %>% View()
 
 #' Missing data:
 #' + BMI: 23.47% (2014 data had 0%)
@@ -272,9 +282,11 @@ crud = rbind(crud_x, crud_z) %>%
 
 Dat <- Dat %>% left_join(crud) %>% 
   mutate(withdraw = ifelse(RXSTOP %in% c('A','C','D','E'),1,0),
-         withdraw_time = ifelse(withdraw==1, pmin(BEGIN_withdraw, as.character(as.Date(DIED) - 7), na.rm = T), 
-                                NA),
-         cens_time = pmin(BEGIN_cens, '2015-01-01', na.rm=T))
+         withdraw_time = case_when(
+           withdraw==1 & is.na(BEGIN_withdraw) ~ as.character(as.Date(DIED) - 7),
+           withdraw == 1 & !is.na(BEGIN_withdraw) ~ BEGIN_withdraw,
+           withdraw==0 ~ NA_character_),
+          cens_time = pmin(BEGIN_cens, '2015-01-01', na.rm=T))
 Dat <-  Dat %>% 
   mutate(cens_time = ifelse(cens_time < FIRST_SE, NA, cens_time),
          withdraw_time = ifelse(withdraw_time < FIRST_SE, NA, withdraw_time))
@@ -301,14 +313,17 @@ zipses <- haven::read_sas(file.path(dbdir,'2015 Core', 'core','zipses1.sas7bdat'
 Dat <- Dat %>% left_join(zipses, by=c('ZIPCODE' = 'zipcode'))
 
 saveRDS(Dat, file = 'data/rda/Analytic.rds', compress = T)
+saveRDS(Dat, file = file.path(dropdir, 'Analytic.rds'), compress=T)
+# saveRDS(Dat, file = file.path(ProjTemplate::find_dropbox(),'NIAMS','Ward','USRDS2915','data','Analytic.rds'))
 
 
 # Save into SQLite --------------------------------------------------------
 
-dbWriteTable(sql_conn, 'zipses', zipses, overwrite=T)
-dbWriteTable(sql_conn, 'AnalyticData', Dat, overwrite=T)
+# TODO: Re-save Analytic data into SQLite dbs
+dbWriteTable(sql_conn, 'zipses', zipses, overwrite = T)
+dbWriteTable(sql_conn, 'AnalyticData', Dat, overwrite = T)
 
 studyids <- Dat %>% select(USRDS_ID)
-dbWriteTable(sql_conn, 'StudyIDs', studyids, overwrite=TRUE)
+dbWriteTable(sql_conn, 'StudyIDs', studyids, overwrite = TRUE)
 
 dbDisconnect(sql_conn)
