@@ -62,7 +62,7 @@ multiple_row_ids <- Dat %>% count(USRDS_ID) %>%
   dplyr::pull(USRDS_ID)
 non_uniques <- Dat %>% filter(USRDS_ID %in% multiple_row_ids) %>% 
   group_by(USRDS_ID) %>% summarise_all(funs(length(unique(.)))) %>% ungroup()
-non_uniques %>% select(-USRDS_ID) %>% summarise_all(funs(sum(. > 1, na.rm=T))) %>% View()
+#non_uniques %>% select(-USRDS_ID) %>% summarise_all(funs(sum(. > 1, na.rm=T))) %>% View()
 
 #' BMI is missing in most, and does change with exam, possibly. We will first replace all available BMI recordings with their 
 #' median BMI over observations. We will also normalize the dichotomous variables to keep the modal value over the 
@@ -141,7 +141,7 @@ saveRDS(Dat, file = 'data/rda/normalizedData.rds')
 
 # Missing value imputation ------------------------------------------------
 
-Dat %>% summarise_all(funs(100*mean(is.na(.)))) %>% View()
+#Dat %>% summarise_all(funs(100*mean(is.na(.)))) %>% View()
 
 #' Missing data:
 #' + BMI: 23.47% (2014 data had 0%)
