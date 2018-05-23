@@ -12,7 +12,7 @@
 
 
 ProjTemplate::reload()
-dbdir = verifyPaths()
+dbdir = verifyPaths(); dir.exists(dbdir)
 sql_conn = dbConnect(SQLite(), file.path(dbdir,'USRDS.sqlite3'))
 
 till2009 <- tbl(sql_conn, 'till2009')
@@ -81,6 +81,7 @@ head(MetsCa)
 
 # till2009 %>% select(USRDS_ID, starts_with('HSDIAG')) %>% show_query()
 # from2010 %>% select(USRDS_ID, starts_with("HSDIAG")) %>% show_query()
+# reticulate::source_python('dementia.py')
 
 # dementia <- read_csv('data/Dementia.csv')
 # names(dementia) <- 'USRDS_ID'
@@ -98,6 +99,7 @@ sqlist <- list(sql1,sql2)
 
 dement <- list()
 for (sql in sqlist){
+  print(paste('Running ',sql))
   rs <- dbSendQuery(sql_conn, sql)
   while(!dbHasCompleted(rs)){
     d <-  dbFetch(rs, n = 10000)
@@ -153,7 +155,7 @@ saveRDS(hospitalization, file = 'data/hospitalization_ids.rds')
 ## CVATIA, CVA = stroke
 ## CANC = cancer
 
-sql_conn <- dbConnect(SQLite(), file.path(dbdir, 'USRDS.sqlite3'))
+# sql_conn <- dbConnect(SQLite(), file.path(dbdir, 'USRDS.sqlite3'))
 medevid <- tbl(sql_conn, 'medevid')
 studyids <- tbl(sql_conn, 'StudyIDs')
 medevid %>% inner_join(studyids) %>% count()
