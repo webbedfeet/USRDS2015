@@ -15,7 +15,7 @@
 
 
 ProjTemplate::reload()
-dbdir = verifyPaths()
+dbdir = verifyPaths(); dir.exists(dbdir)
 dropdir <- file.path(ProjTemplate::find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
 
 # extract data from DB ------------------------------------------------------------------------
@@ -98,6 +98,7 @@ saveRDS(hospitalization, file = 'data/hospitalization_ids.rds', compress = T)
 
 # till2009 %>% select(USRDS_ID, starts_with('HSDIAG')) %>% show_query()
 # from2010 %>% select(USRDS_ID, starts_with("HSDIAG")) %>% show_query()
+# reticulate::source_python('dementia.py')
 
 # dementia <- read_csv('data/Dementia.csv')
 # names(dementia) <- 'USRDS_ID'
@@ -116,6 +117,7 @@ sqlist <- list(sql1,sql2)
 dement <- list()
 i=0
 for (sql in sqlist){
+  print(paste('Running ',sql))
   rs <- dbSendQuery(sql_conn, sql)
   while(!dbHasCompleted(rs)){
     d <-  dbFetch(rs, n = 100000)
