@@ -198,7 +198,8 @@ hosp_post_dx <-
         distinct() %>% 
         ungroup())
 
-
+saveRDS(hosp_post_dx, 'data/rda/final_hosp_data.rds', compress = T)
+saveRDS(hosp_post_dx, file.path(dropdir, 'final_hosp_data.rds'), compress = T)
 
 # Propensity of withdrawal based on timing of Comorb ------------------------------------------
 
