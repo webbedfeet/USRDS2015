@@ -350,6 +350,25 @@ Dat %>% filter(RACE2 != 'Other', cens_type == 3) %>%
 # (b) randomly drawn from race-specific distribution
 
 
+# Assessing comorbidities from hospitalization ------------------------------------------------
+## Extracting the right variables from the hospitalization tables for ICD-9 queries
+ProjTemplate::reload()
+dbdir = verifyPaths(); dir.exists(dbdir)
+sql_conn = dbConnect(SQLite(), file.path(dbdir,'USRDS.sqlite3'))
+hospitalizations <- readRDS('data/hospitalization_ids.rds')
+
+for( i in 1:length(hospitalizations)){
+  dbWriteTable(sql_conn, names(hospitalizations)[i], hospitalizations[[i]])
+}
+
+studyids <- tbl(sql_conn,'StudyIDs')
+till2009 <- tbl(sql_conn, 'till2009')
+from2010 <- tbl(sql_conn, 'from2010')
+
+d <- till2009 %>% select(USRDS_ID, starts_with("CLM"), contains("DIAG")) %>% 
+  semi_join(studys) %>% 
+  collect(n = Inf)
+
 # Verifying incident cases from medevid ------------------------------------
 
 ## CVATIA, CVA = stroke
