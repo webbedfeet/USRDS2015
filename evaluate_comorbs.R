@@ -84,7 +84,40 @@ for(f in datafiles){
 
 saveRDS(index_condn_comorbs, file.path(dropdir, 'index_condn_comorbs.rds'), compress=T)
 
-# TODO: Mutate comorbs so that once you get disease, you stay a 1 from then on
-# TODO: Compute USRDS comorb score at each hospitalization
+# Mutate comorbs so that once you get disease, you stay a 1 from then on ----
+
+impute_ones <- function(x){
+  if(any(x)){
+    n <- length(x)
+    i <- min(which(x)) # Assumes T/F variable
+    x[i:n] <- TRUE
+    return(x)
+  } else{
+    return(x)
+  }
+}
+
+for(i in 1:length(index_condn_comorbs)){
+  print(paste0('Working on ', names(index_condn_comorbs)[i]))
+  d <- index_condn_comorbs[[i]]
+  index_condn_comorbs[[i]] <- d %>% 
+    arrange(USRDS_ID, CLM_FROM) %>% 
+    group_by(USRDS_ID) %>% 
+    mutate_at(vars(ASHD:Diabetes), impute_ones) %>% 
+    ungroup()
+}
+
+
+
+# Compute USRDS comorb score at each hospitalization ----
+# Based on Table 2 of Liu, et al, 
+# Kidney International (2010) 77, 141–151; doi:10.1038/ki.2009.413
+
+d <- d %>% 
+  mutate(comorb_indx = ASHD + 3*CHF + 
+           2 * (CVATIA + PVD + Other.cardiac + COPD + 
+                  GI.Bleeding + Liver + Dysrhhythmia + Cancer) +
+           Diabetes)
+
 # TODO: Determine baseline status for GI and Liver
 # TODO: Determine status at time of index condition
