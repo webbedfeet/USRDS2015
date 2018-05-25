@@ -83,3 +83,8 @@ for(f in datafiles){
 }
 
 saveRDS(index_condn_comorbs, file.path(dropdir, 'index_condn_comorbs.rds'), compress=T)
+
+# TODO: Mutate comorbs so that once you get disease, you stay a 1 from then on
+# TODO: Compute USRDS comorb score at each hospitalization
+# TODO: Determine baseline status for GI and Liver
+# TODO: Determine status at time of index condition
