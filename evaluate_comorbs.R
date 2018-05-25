@@ -61,15 +61,25 @@ comorb_codes <- list(
 
 
 # Extract data for patients with each index condition -----------------------------------------
-d <- readRDS('data/rda/tmpComorb.rds')
+# d <- readRDS('data/rda/tmpComorb.rds')
 
-dd <- d %>% select(USRDS_ID, starts_with('CLM'), starts_with("HSDIAG")) %>% 
-  gather(blnk, codes, starts_with('HSDIAG')) %>% 
-  select(-blnk) %>% 
-  arrange(USRDS_ID,CLM_FROM, CLM_THRU) %>% 
-  nest(codes) %>% 
-  mutate(comorbs = map(data, 
-                       ~as.data.frame(lapply(comorb_codes, function(x) any(x %in% .$codes))))) %>% 
-  select(-data) %>% 
-  unnest()
+determine_comorbs <- function(d){
+  d %>% select(USRDS_ID,starts_with("CLM"), starts_with("HSDIAG")) %>% 
+    gather(DIAG, codes, starts_with("HSDIAG")) %>% 
+    bind_cols(as.data.frame(lapply(comorb_codes, function(x) .$codes %in% x))) %>% 
+    select(-DIAG, -codes) %>% 
+    group_by(USRDS_ID, CLM_FROM,CLM_THRU) %>% 
+    summarise_all(any) %>% 
+    ungroup()
+}
 
+datafiles <- paste0('data/rda/',names(hospitalization),'.rds')
+index_condn_comorbs <- list()
+for(f in datafiles){
+  d <- readRDS(f)
+  print(paste('Reading', basename(f),'...'))
+  index_condn_comorbs[[str_remove(basename(f), '.rds')]] <- 
+    bind_rows(map(d, determine_comorbs))
+}
+
+saveRDS(index_condn_comorbs, file.path(dropdir, 'index_condn_comorbs.rds'), compress=T)
