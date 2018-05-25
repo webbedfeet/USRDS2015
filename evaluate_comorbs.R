@@ -113,11 +113,14 @@ for(i in 1:length(index_condn_comorbs)){
 # Based on Table 2 of Liu, et al, 
 # Kidney International (2010) 77, 141–151; doi:10.1038/ki.2009.413
 
-d <- d %>% 
+for(i in 1:length(index_condn_comorbs)){
+  d <- index_condn_comorbs[[i]]
+  index_condn_comorbs[[i]] <- d %>% 
   mutate(comorb_indx = ASHD + 3*CHF + 
            2 * (CVATIA + PVD + Other.cardiac + COPD + 
                   GI.Bleeding + Liver + Dysrhhythmia + Cancer) +
            Diabetes)
-
+}
 # TODO: Determine baseline status for GI and Liver
+
 # TODO: Determine status at time of index condition
