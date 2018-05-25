@@ -43,23 +43,33 @@ saveRDS(d, 'data/rda/tmpComorb.rds', compress = T)
 dbDisconnect(sql_conn)
 
 
+# ICD-9 codes for each comorbidity ------------------------------------------------------------
+
+comorb_codes <- list(
+  'ASHD' = '410-414, V4581, V4582',
+  'CHF' = '39891, 422, 425, 428, 402X1,404X1, 404X3, V421',
+  'CVATIA' = '430-438',
+  'PVD' = '440-444, 447, 451-453, 557',
+  'Other cardiac' = '420-421, 423-424, 429, 7850-7853,V422,V433',
+  'COPD' = '491-494, 496, 510',
+  'GI Bleeding' = '4560-4562, 5307, 531-534, 56984, 56985,578',
+  'Liver' = '570-571,5721, 5724,5731-5733,V427',
+  'Dysrhhythmia' = '426-427,V450, V533',
+  'Cancer' = '140-172, 174-208, 230-231, 233-234',
+  'Diabetes' = '250, 3572, 3620X, 36641'
+) %>% map(icd9_codes)
+
+
 # Extract data for patients with each index condition -----------------------------------------
 d <- readRDS('data/rda/tmpComorb.rds')
 
+dd <- d %>% select(USRDS_ID, starts_with('CLM'), starts_with("HSDIAG")) %>% 
+  gather(blnk, codes, starts_with('HSDIAG')) %>% 
+  select(-blnk) %>% 
+  arrange(USRDS_ID,CLM_FROM, CLM_THRU) %>% 
+  nest(codes) %>% 
+  mutate(comorbs = map(data, 
+                       ~as.data.frame(lapply(comorb_codes, function(x) any(x %in% .$codes))))) %>% 
+  select(-data) %>% 
+  unnest()
 
-query_icd9 <- function(...){
-  x <- as.character(sys.call())[-1]
-  x <- x %>% 
-    str_split('-') %>% 
-    map(str_trim) %>%
-    map(create_seq) %>% 
-    map(as.character) %>% 
-    unlist() %>% str_c('^',.)
-    
-  return(x)
-}
-create_seq <- function(x){
-  if(any(is.na(as.numeric(x)))) return(x)
-  seq(x[1], x[2])
-}
-tst = '141-144'
