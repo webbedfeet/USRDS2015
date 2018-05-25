@@ -121,6 +121,17 @@ for(i in 1:length(index_condn_comorbs)){
                   GI.Bleeding + Liver + Dysrhhythmia + Cancer) +
            Diabetes)
 }
-# TODO: Determine baseline status for GI and Liver
+# Determine baseline status for GI and Liver ----
 
+AnalyticData <- readRDS('data/rda/Analytic.rds')
+baseline_comorbs_by_index_condn <- 
+  lapply(index_condn_comorbs, function(d){
+    d <- left_join(d, select(AnalyticData, USRDS_ID, FIRST_SE))
+    d <- d %>% filter(CLM_FROM >= FIRST_SE | CLM_THRU >= FIRST_SE)
+    
+    d %>% group_by(USRDS_ID) %>% filter(CLM_FROM == min(CLM_FROM)) %>% 
+      select(USRDS_ID, ASHD:comorb_indx) %>% ungroup()
+    return(d)
+  }
+  )
 # TODO: Determine status at time of index condition
