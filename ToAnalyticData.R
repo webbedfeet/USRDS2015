@@ -319,7 +319,6 @@ saveRDS(Dat, file = file.path(dropdir, 'Analytic.rds'), compress=T)
 
 # Save into SQLite --------------------------------------------------------
 
-# TODO: Re-save Analytic data into SQLite dbs
 dbWriteTable(sql_conn, 'zipses', zipses, overwrite = T)
 dbWriteTable(sql_conn, 'AnalyticData', Dat, overwrite = T)
 

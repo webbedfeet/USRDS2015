@@ -82,7 +82,6 @@ for(f in datafiles){
     bind_rows(map(d, determine_comorbs))
 }
 
-saveRDS(index_condn_comorbs, file.path(dropdir, 'index_condn_comorbs.rds'), compress=T)
 
 # Mutate comorbs so that once you get disease, you stay a 1 from then on ----
 
@@ -121,17 +120,24 @@ for(i in 1:length(index_condn_comorbs)){
                   GI.Bleeding + Liver + Dysrhhythmia + Cancer) +
            Diabetes)
 }
+saveRDS(index_condn_comorbs, file.path(dropdir, 'index_condn_comorbs.rds'), compress=T)
+
 # Determine baseline status for GI and Liver ----
 
 AnalyticData <- readRDS('data/rda/Analytic.rds')
+index_condn_comorbs <- readRDS(file.path(dropdir, 'index_condn_comorbs.rds'))
 baseline_comorbs_by_index_condn <- 
   lapply(index_condn_comorbs, function(d){
     d <- left_join(d, select(AnalyticData, USRDS_ID, FIRST_SE))
     d <- d %>% filter(CLM_FROM >= FIRST_SE | CLM_THRU >= FIRST_SE)
     
-    d %>% group_by(USRDS_ID) %>% filter(CLM_FROM == min(CLM_FROM)) %>% 
-      select(USRDS_ID, ASHD:comorb_indx) %>% ungroup()
+    d <- d %>% group_by(USRDS_ID) %>% filter(CLM_FROM == min(CLM_FROM)) %>% 
+      select(USRDS_ID, ASHD:comorb_indx) %>% distinct() %>% 
+      filter(comorb_indx == max(comorb_indx)) %>% # In case of bad duplicate stays, go with worse outcomes
+      ungroup()
     return(d)
   }
   )
 # TODO: Determine status at time of index condition
+
+
