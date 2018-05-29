@@ -154,4 +154,22 @@ Z    | Recovered Function
 ## Hospitalization analysis
 
 We find that the overall cause-specific hazard of discontinuation is lower among racial groups than whites.
-TODO: Count time since last comorbidity event
+
+## May 29, 2018
+
+1. Create two models for the withdrawal process in whites:
+     
+     + A propensity model using logistic regression to predict who withdraws
+     + A parametric survival model among those who withdrew to model time to withdrawal after index condition  
+   
+1. Both models will use age, race, sex, time from start of dialysis to index condition, and comorbidity score at
+   time of index condition as predictors. 
+
+1. Use these models to predict the withdrawal behavior of blacks, then simulate the survival behavior based on 
+   time to event after withdrawal that is observed among blacks. (median of 7 days)
+
+1. Simulate several such predictions and see how the survival rate (or KM curve) for blacks changes, in comparason
+   with observed data, and also in comparison with white survival rates. Over the simulation, are there differences between
+   white and black survival.
+
+2. 
