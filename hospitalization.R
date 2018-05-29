@@ -352,41 +352,30 @@ Dat %>% filter(RACE2 != 'Other', cens_type == 3) %>%
 
 
 # Assessing comorbidities from hospitalization ------------------------------------------------
-## Extracting the right variables from the hospitalization tables for ICD-9 queries
-ProjTemplate::reload()
-dbdir = verifyPaths(); dir.exists(dbdir)
-sql_conn = dbConnect(SQLite(), file.path(dbdir,'USRDS.sqlite3'))
-hospitalizations <- readRDS('data/hospitalization_ids.rds')
-
-# for( i in 1:length(hospitalizations)){
-#   dbWriteTable(sql_conn, names(hospitalizations)[i], hospitalizations[[i]])
-# }
-studyids <- tbl(sql_conn,'StudyIDs')
-till2009 <- tbl(sql_conn, 'till2009')
-from2010 <- tbl(sql_conn, 'from2010')
-thrive = tbl(sql_conn, 'thrive')
+## This is done in evaluate_comorbidities.R
 
 
- till2009_thrive<- thrive %>% left_join(till2009 %>% select(USRDS_ID, starts_with("CLM"), contains("DIAG")))
- compute(till2009_thrive)
-# Verifying incident cases from medevid ------------------------------------
+# Matching comorbidity score with time of index condition -------------------------------------
 
-## CVATIA, CVA = stroke
-## CANC = cancer
+index_condn_comorbs <- readRDS(file.path(dropdir, 'index_condn_comorbs.rds'))
+hosp_post_dx <- readRDS(file.path(dropdir, 'final_hosp_data.rds'))
 
-# sql_conn <- dbConnect(SQLite(), file.path(dbdir, 'USRDS.sqlite3'))
-# medevid <- tbl(sql_conn, 'medevid')
-# studyids <- tbl(sql_conn, 'StudyIDs')
-# medevid %>% inner_join(studyids) %>% count()
-# joined_tbl <- medevid %>% inner_join(studyids)
+out <- list()
+for (n in names(hosp_post_dx)){
+  print(paste('Working on ', n))
+  d <- index_condn_comorbs[[n]] %>% select(USRDS_ID:CLM_THRU, comorb_indx)
+  hosp_post_dx[[n]] %>% mutate(CLM_FROM = as.character(CLM_FROM),
+                               CLM_THRU = as.character(CLM_THRU)) %>% 
+    left_join(d) %>% 
+    group_by(USRDS_ID) %>% 
+    filter(comorb_indx == max(comorb_indx)) %>% 
+    ungroup() %>% 
+    distinct() -> out[[n]]
+}
+assertthat::are_equal(map_int(hosp_post_dx, nrow), map_int(out, nrow))
+hosp_post_dx <- out
+
+# TODO: Model time to withdrawal as a function of age, sex, race, time to 
+# index condition from FIRST_SE and comorbidity score, using parametric survival models
 # 
-# bl <- medevid %>% inner_join(studyids) %>% collect(n=5) # Exploration
-# 
-# ## CANCER and COMO_CANC are identical as are CVA and COMO_CVATIA. So you need only one
-# bl2 <- joined_tbl %>% select(USRDS_ID, CVA,  CANCER,  CTDATE, DIALDAT, DIALEDT, DIED) %>%
-#   collect(n=Inf) %>%
-#   filter(CVA != '') # Same individuals are missing CVA and CANCER
-# bl2 <- bl2 %>%
-#   group_by(USRDS_ID) %>%
-#   top_n(-1, DIALDAT) %>% # Take the earliest dialysis date
-#   ungroup()
+
