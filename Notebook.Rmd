@@ -172,4 +172,17 @@ We find that the overall cause-specific hazard of discontinuation is lower among
    with observed data, and also in comparison with white survival rates. Over the simulation, are there differences between
    white and black survival.
 
-2. 
+## June 6, 2018
+
+The first point above is not the right way to think about this problem. I think we create one
+model that captures the withdrawal and censoring (due to administrative censoring, transplant or death,
+all of which are reasonably independent of the decision to withdraw). We can then predict the 
+withdrawal time in other populations under the White model. Then, if the predicted withdrawal 
+time is before death, transplant or censoring time, we consider them withdrawn. 
+
+Why do I think point 1. is not correct? It's because what we're really looking at is capturing the 
+discontinuation __process__ rather than actual discontinuations, with all that embodies. So the 
+question is, if the same process is followed by other races, when would they discontinue, and 
+would that affect their outcome. What we're observing in Whites is their process of discontinuation
+as a failure time process, but sometimes not observed due to competing risks like transplant and
+death.
