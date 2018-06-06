@@ -204,7 +204,7 @@ saveRDS(hosp_post_dx, file.path(dropdir, 'final_hosp_data.rds'), compress = T)
 # Propensity of withdrawal based on timing of Comorb ------------------------------------------
 
 #' what's the chance of discontinuation, by race
-hosp_post_dx <- readRDS('data/rda/final_hosp_data.rds')
+hosp_post_dx <- readRDS(file.path(dropdir,'final_hosp_data.rds'))
 Dat <- readRDS('data/rda/Analytic.rds')
 Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>% 
   mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
@@ -275,9 +275,11 @@ hosp_cox_data <-
         filter(Race != 'Other') %>% 
         mutate(Race = droplevels(Race)))
 
-names(hosp_cox_data) <- c('Primary stroke','Stroke with complications',
-                          'Lung Cancer','Metastatic Cancer',
-                          'Dementia','Failure to thrive')
+# names(hosp_cox_data) <- c('Primary stroke','Stroke with complications',
+#                           'Lung Cancer','Metastatic Cancer',
+#                           'Dementia','Failure to thrive')
+saveRDS(hosp_cox_data, file.path(dropdir, 'hosp_cox_data.rds'), compress = T)
+
 ## Kaplan Meier curves
 
 fit_list = map(hosp_cox_data, ~survfit(Surv(time_from_event, cens_type==3)~ Race, 
@@ -382,6 +384,8 @@ hosp_post_dx <- out
 # TODO: Model time to withdrawal as a function of age, sex, race, time to 
 # index condition from FIRST_SE and comorbidity score, using parametric survival models
 # 
+
+hosp_cox_data <- readRDS(file.path(dropdir, 'hosp_cox_data.rds'))
 modeling_data <- hosp_cox_data
 for(n in names(modeling_data)){
   modeling_data[[n]] <- modeling_data[[n]] %>% left_join(out[[n]] %>% select(USRDS_ID, comorb_indx))
@@ -391,5 +395,5 @@ for(n in names(modeling_data)){
 weib1 <- survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
                    agegrp_at_event + SEX  + time_on_dialysis +
                    zscore + comorb_indx, 
-                 data = modeling_data$stroke_primary %>% filter(Race=='White', cens_type==3), 
+                 data = modeling_data$stroke_primary %>% filter(Race == 'White'), 
                  dist = 'weibull')
