@@ -180,6 +180,14 @@ all of which are reasonably independent of the decision to withdraw). We can the
 withdrawal time in other populations under the White model. Then, if the predicted withdrawal 
 time is before death, transplant or censoring time, we consider them withdrawn. 
 
+> Note about Weibull parametrization: The Weibull model is parametrized differently in 
+`survreg` and `rweibull`. The translation between the two is as follows:
+
+|  survreg|  rweibull |
+|:--|:--|
+|  scale|  1/shape|
+|  linear predictor|  log(scale) |
+
 Why do I think point 1. is not correct? It's because what we're really looking at is capturing the 
 discontinuation __process__ rather than actual discontinuations, with all that embodies. So the 
 question is, if the same process is followed by other races, when would they discontinue, and 
