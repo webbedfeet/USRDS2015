@@ -385,6 +385,7 @@ hosp_post_dx <- out
 # index condition from FIRST_SE and comorbidity score, using parametric survival models
 # 
 
+Dat <- readRDS('data/rda/Analytic.rds')
 hosp_cox_data <- readRDS(file.path(dropdir, 'hosp_cox_data.rds'))
 modeling_data <- hosp_cox_data
 for(n in names(modeling_data)){
@@ -397,3 +398,55 @@ weib1 <- survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weib
                    zscore + comorb_indx, 
                  data = modeling_data$stroke_primary %>% filter(Race == 'White'), 
                  dist = 'weibull')
+
+
+## Data munging to add simulated withdrawal times
+
+modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, toc:tow), by ='USRDS_ID') %>% 
+                        mutate_at(vars(toc:tow), funs(.*365.25)) %>% 
+                        split(.$Race)) # convert times to days
+set.seed(10385)
+
+stroke_primary = modeling_data2$stroke_primary
+
+weib = survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
+                 agegrp_at_event + SEX  + time_on_dialysis +
+                 zscore + comorb_indx, 
+               data = stroke_primary$White, 
+               dist = 'weibull')
+stroke_primary <- map(stroke_primary, ~mutate_at(., vars(toc:tow), funs(as.numeric(.) - as.numeric(time_on_dialysis))))
+shp = 1/weib$scale
+sc <- map(stroke_primary, ~exp(predict(weib, newdata = ., type = 'lp')))
+stroke_primary$White <- stroke_primary$White %>% 
+  mutate(new_tow = tow)
+
+for(n in setdiff(names(stroke_primary), 'White')){
+  stroke_primary[[n]]$new_tow = round(map_dbl(sc[[n]], ~rweibull(1, shape = shp, scale = .)))
+}
+stroke_primary <- map(stroke_primary, ~mutate(., new_surv_time = pmin(toc, tod, tot, new_tow, na.rm=T)) %>% 
+                        mutate(new_cens_type = case_when(toc == new_surv_time ~ 0, tod == new_surv_time ~ 1, tot == new_surv_time ~ 2, new_tow == new_surv_time ~ 3)))
+
+  stroke_primary[[n]] <- stroke_primary[[n]] %>%
+    mutate(new_surv_time = pmin(toc, tod, tot, new_tow, na.rm=T)) %>% 
+    mutate(new_cens_type = case_when(toc == new_surv_time ~ 0, tod == new_surv_time ~ 1, tot == new_surv_time ~ 2, new_tow == new_surv_time ~ 3))
+}
+blah = bind_rows(stroke_primary)
+
+n <- 'Black'
+lp = predict(weib, newdata = stroke_primary[[n]], type = 'lp')
+shp = 1/weib$scale
+sc = exp(lp)
+stroke_primary[[n]] <- stroke_primary[[n]] %>% 
+  mutate_at(vars(toc:tow), funs(as.numeric(.) - as.numeric(time_on_dialysis)))
+
+pvals = rep(0, 100)
+for(i in 1:100){
+  print(i)
+  stroke_primary[[n]]$new_tow = round(map_dbl(sc, ~rweibull(1, shape = shp, scale = .)))
+  stroke_primary[[n]] <- stroke_primary[[n]] %>% 
+    mutate(new_surv_time = pmin(toc, tod, tot, new_tow, na.rm=T)) %>% 
+    mutate(new_cens_type = case_when(toc == new_surv_time ~ 0, tod == new_surv_time ~ 1, tot == new_surv_time ~ 2, new_tow == new_surv_time ~ 3))
+  blah = bind_rows(stroke_primary[c('White','Black')])
+  sdiff = survdiff(Surv(new_surv_time, new_cens_type %in% c(1,3))~ Race, data = blah)
+  pvals[i] <- pchisq(sdiff$chisq,1, lower.tail=F)
+}
