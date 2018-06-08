@@ -434,42 +434,8 @@ for (cnd in conds) {
     cox_models[[cnd]][[i]] <- broom::tidy(coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah))
   }
 }
-# stroke_primary = modeling_data2$stroke_primary
-# 
-# weib = survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
-#                  agegrp_at_event + SEX  + time_on_dialysis +
-#                  zscore + comorb_indx, 
-#                data = stroke_primary$White, 
-#                dist = 'weibull')
-# stroke_primary <- map(stroke_primary, ~mutate_at(., vars(toc:tow), funs(as.numeric(.) - as.numeric(time_on_dialysis))))
-# shp = 1/weib$scale
-# sc <- map(stroke_primary, ~exp(predict(weib, newdata = ., type = 'lp')))
-# stroke_primary$White <- stroke_primary$White %>% 
-#   mutate(new_tow = tow)
-# 
-# nsim <- 1000
-# rw <- map(sc, ~matrix(rweibull(length(.)*nsim, shape = shp, scale = .), ncol=nsim, byrow=F))
-# 
-# cox_models <- list()
-# # HRs <- matrix(rep(0,nsim*4), ncol = 4)
-# for(i in 1:nsim){
-#   print(i)
-#   for(n in setdiff(names(stroke_primary), 'White')){
-#     stroke_primary[[n]]$new_tow = rw[[n]][,i]
-#   }
-#   stroke_primary <- map(stroke_primary, ~mutate(., new_surv_time = pmin(toc, tod, tot, new_tow, na.rm=T)) %>% 
-#                           mutate(new_cens_type = case_when(toc == new_surv_time ~ 0, tod == new_surv_time ~ 1, tot == new_surv_time ~ 2, new_tow == new_surv_time ~ 3)))
-#   blah = bind_rows(stroke_primary)
-#   cox_models[[i]] <- broom::tidy(coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah))
-#   # HRs[i,] <- coef(cph)
-#   # sdiff <- survdiff(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah)
-#   # pvals[i] <- pchisq(sdiff$chisq, 4, lower.tail = FALSE)
-# }
 
-bl <- map(cox_models, ~select(.,term, estimate) %>% spread(term, estimate)) %>% bind_rows() %>% 
-  gather(Race, logHR) %>% 
-  mutate(Race = str_remove(Race, 'Race'))
+saveRDS(cox_models, file=file.path(dropdir,'sim_cox.rds'), compress = T)
 
-saveRDS(cox_models, file=file.path(dropdir,'sim_cox_stroke_p.rds'), compress = T)
 
 # TODO: Do some residual analysis and validation of White Weibull model
