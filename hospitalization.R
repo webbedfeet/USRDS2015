@@ -419,7 +419,8 @@ stroke_primary$White <- stroke_primary$White %>%
 nsim <- 1000
 rw <- map(sc, ~matrix(rweibull(length(.)*nsim, shape = shp, scale = .), ncol=nsim, byrow=F))
 
-HRs <- matrix(rep(0,nsim*4), ncol = 4)
+cox_models <- list()
+# HRs <- matrix(rep(0,nsim*4), ncol = 4)
 for(i in 1:nsim){
   print(i)
   for(n in setdiff(names(stroke_primary), 'White')){
@@ -428,8 +429,8 @@ for(i in 1:nsim){
   stroke_primary <- map(stroke_primary, ~mutate(., new_surv_time = pmin(toc, tod, tot, new_tow, na.rm=T)) %>% 
                           mutate(new_cens_type = case_when(toc == new_surv_time ~ 0, tod == new_surv_time ~ 1, tot == new_surv_time ~ 2, new_tow == new_surv_time ~ 3)))
   blah = bind_rows(stroke_primary)
-  cph <- coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah)
-  HRs[i,] <- coef(cph)
+  cox_models[[i]] <- coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah)
+  # HRs[i,] <- coef(cph)
   # sdiff <- survdiff(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah)
   # pvals[i] <- pchisq(sdiff$chisq, 4, lower.tail = FALSE)
 }
