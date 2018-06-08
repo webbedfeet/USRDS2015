@@ -437,5 +437,58 @@ for (cnd in conds) {
 
 saveRDS(cox_models, file=file.path(dropdir,'sim_cox.rds'), compress = T)
 
+map(modeling_data2, ~bind_rows(.x) %>% 
+      coxph(Surv(time_from_event, cens_type %in% c(1,3))~Race, data = .) %>% 
+      broom::tidy() %>% 
+      select(term, estimate, conf.low, conf.high) %>% 
+      mutate_at(vars(-term), exp)) %>% 
+  bind_rows(.id = 'Condition') %>% 
+  mutate(term = str_remove(term, 'Race')) %>% 
+  filter(term=='Asian') %>% 
+  mutate(type = 'Nominal') -> blah1
+
+blah = modify_depth(cox_models, 2, ~select(., term, estimate) %>% 
+                      filter(term=='RaceAsian') %>% 
+                      mutate(estimate = exp(estimate))) %>% 
+  map(~bind_rows(.) %>% 
+        summarize(estimate = median(estimate), 
+                  conf.low = quantile(estimate, 0.025), 
+                  conf.high=quantile(estimate, 0.975))) %>% 
+  bind_rows(.id = 'Condition') %>% 
+  mutate(type = 'Simulated', term = 'Black') %>% 
+  select(Condition, term, everything())
+
+bind_rows(list(blah, blah1)) %>% 
+  ggplot(aes(x = Condition, y = estimate, ymin = conf.low, ymax = conf.high,
+             group = type, color = type))+
+  geom_pointrange(size = .5)+
+  geom_hline(yintercept = 1, linetype = 2)+
+  labs(y = 'Hazard ratio vs Whites')+
+  coord_flip()+
+  ggtitle('Asian')
+
+map(modeling_data2, ~bind_rows(.x) %>% 
+      coxph(Surv(time_from_event, cens_type %in% c(1,3))~Race, data = .) %>% 
+      broom::tidy() %>% 
+      select(term, estimate, conf.low, conf.high) %>% 
+      mutate_at(vars(-term), exp)) %>% 
+  bind_rows(.id = 'Condition') %>% 
+  mutate(term = str_remove(term, 'Race')) %>% 
+  rename(Race = term) %>% 
+  openxlsx::write.xlsx('Original_HR.xlsx')
+
+bl <- modify_depth(cox_models, 2, ~select(., term, estimate) %>%
+mutate(estimate = exp(estimate))) %>%
+map(~bind_rows(.) )
+bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
+pdf('SimulationResults.pdf')
+for(n in names(bl)){
+  print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
+          facet_wrap(~term, scales = 'free', nrow = 2)+
+          labs(x = 'Hazard ratio against Whites', y = '') + 
+          ggtitle(n))
+}
+dev.off()
+
 
 # TODO: Do some residual analysis and validation of White Weibull model
