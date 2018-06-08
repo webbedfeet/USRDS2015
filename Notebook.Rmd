@@ -194,3 +194,10 @@ question is, if the same process is followed by other races, when would they dis
 would that affect their outcome. What we're observing in Whites is their process of discontinuation
 as a failure time process, but sometimes not observed due to competing risks like transplant and
 death.
+
+## June 8, 2018
+
+1. Create Cox-Snell residuals to check validity of Weibull model
+1. Compute YLL for all ethnic groups due to normalizing discontinuation to Whites
+1. Create table 1 (All covariates in weib, + percentage of each outcome type, by race and overall)
+1. Add a bar for nominal HR on the simulation HR histograms
