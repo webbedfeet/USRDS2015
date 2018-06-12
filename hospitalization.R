@@ -406,6 +406,7 @@ sim_fn <- function(dat_list, nsim = 1000){
   cox_models <- list()
   set.seed(10385)
   for (cnd in conds) {
+    print(paste('Working on', cnd))
     D <- dat_list[[cnd]]
     weib <- survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
                       agegrp_at_event + SEX  + time_on_dialysis +
@@ -420,7 +421,7 @@ sim_fn <- function(dat_list, nsim = 1000){
     cox_models[[cnd]] <- list()
     rw <- map(sc, ~matrix(rweibull(length(.)*nsim, shape = shp, scale = .), ncol = nsim, byrow = F))
     for (i in 1:nsim) {
-      print(i)
+      if(i %% 100 == 0) print(i)
       for(n in setdiff(names(D), 'White')){
         D[[n]]$new_tow <- rw[[n]][,i]
       }
@@ -441,10 +442,8 @@ cox_models <- sim_fn(modeling_data2)
 #saveRDS(cox_models, file=file.path(dropdir,'sim_cox.rds'), compress = T)
 
 # Simulation study stratified by group --------------------------------------------------------
-modeling_data2_young <- modify_depth(modeling_data2, 2, ~filter(., age_at_event < 70) %>% 
-                                       mutate(agegrp_at_event = forcats::fct_drop(agegrp_at_event)))
-modeling_data2_old <- modify_depth(modeling_data2, 2, ~filter(., age_at_event >= 70) %>% 
-                                     mutate(agegrp_at_event = forcats::fct_drop(agegrp_at_event)))
+modeling_data2_young <- modify_depth(modeling_data2, 2, ~filter(., age_at_event < 70)) 
+modeling_data2_old <- modify_depth(modeling_data2, 2, ~filter(., age_at_event >= 70))
 
 ## Some summaries
 N_young <- modify_depth(modeling_data2_young, 1, ~map_df(., nrow)) %>% 
@@ -455,6 +454,31 @@ N_old <- modify_depth(modeling_data2_old, 1, ~map_df(., nrow)) %>%
 cox_models_young <- sim_fn(modeling_data2_young)
 cox_models_old <- sim_fn(modeling_data2_old)
 
+bl <- modify_depth(cox_models_old, 2, ~select(., term, estimate) %>%
+                     mutate(estimate = exp(estimate))) %>%
+  map(~bind_rows(.) )
+bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
+pdf('SimulationResults_old.pdf')
+for(n in names(bl)){
+  print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
+          facet_wrap(~term, scales = 'free', nrow = 2)+
+          labs(x = 'Hazard ratio against Whites', y = '') + 
+          ggtitle(paste('Age 70+:', n)))
+}
+dev.off()
+
+bl <- modify_depth(cox_models_young, 2, ~select(., term, estimate) %>%
+                     mutate(estimate = exp(estimate))) %>%
+  map(~bind_rows(.) )
+bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
+pdf('SimulationResults_young.pdf')
+for(n in names(bl)){
+  print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
+          facet_wrap(~term, scales = 'free', nrow = 2)+
+          labs(x = 'Hazard ratio against Whites', y = '') + 
+          ggtitle(paste('Age 69-:', n)))
+}
+dev.off()
 
 # Some plotting options -----------------------------------------------------------------------
 
