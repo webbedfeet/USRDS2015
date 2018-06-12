@@ -401,41 +401,63 @@ modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, toc:tow
 
 # Simulation study ----------------------------------------------------------------------------
 
-conds <- names(modeling_data2)
-cox_models <- list()
-set.seed(10385)
-for (cnd in conds) {
-  D <- modeling_data2[[cnd]]
-  weib <- survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
-                    agegrp_at_event + SEX  + time_on_dialysis +
-                    zscore + comorb_indx, 
-                  data = D$White, 
-                  dist = 'weibull')
-  D <- map(D,  ~mutate_at(., vars(toc:tow), funs(as.numeric(.) - as.numeric(time_on_dialysis))))
-  shp <- 1/weib$scale
-  sc <- map(D, ~exp(predict(weib, newdata = ., type = 'lp')))
-  D$White <- D$White %>% mutate(new_tow = tow)
-  
-  cox_models[[cnd]] <- list()
-  nsim <- 1000
-  rw <- map(sc, ~matrix(rweibull(length(.)*nsim, shape = shp, scale = .), ncol = nsim, byrow = F))
-  for (i in 1:nsim) {
-    print(i)
-    for(n in setdiff(names(D), 'White')){
-      D[[n]]$new_tow <- rw[[n]][,i]
+sim_fn <- function(dat_list, nsim = 1000){
+  conds <- names(dat_list)
+  cox_models <- list()
+  set.seed(10385)
+  for (cnd in conds) {
+    D <- dat_list[[cnd]]
+    weib <- survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
+                      agegrp_at_event + SEX  + time_on_dialysis +
+                      zscore + comorb_indx, 
+                    data = D$White, 
+                    dist = 'weibull')
+    D <- map(D,  ~mutate_at(., vars(toc:tow), funs(as.numeric(.) - as.numeric(time_on_dialysis))))
+    shp <- 1/weib$scale
+    sc <- map(D, ~exp(predict(weib, newdata = ., type = 'lp')))
+    D$White <- D$White %>% mutate(new_tow = tow)
+    
+    cox_models[[cnd]] <- list()
+    rw <- map(sc, ~matrix(rweibull(length(.)*nsim, shape = shp, scale = .), ncol = nsim, byrow = F))
+    for (i in 1:nsim) {
+      print(i)
+      for(n in setdiff(names(D), 'White')){
+        D[[n]]$new_tow <- rw[[n]][,i]
+      }
+      D <- map(D, ~mutate(., new_surv_time = pmin(toc, tod, tot, new_tow, na.rm=T)) %>% 
+                 mutate(new_cens_type = case_when(toc == new_surv_time ~ 0, 
+                                                  tod == new_surv_time ~ 1, 
+                                                  tot == new_surv_time ~ 2, 
+                                                  new_tow == new_surv_time ~ 3)) %>% 
+                 mutate(new_surv_time = ifelse(new_cens_type==3, new_surv_time + 7, new_surv_time))) # take withdrawal to death
+      blah = bind_rows(D)
+      cox_models[[cnd]][[i]] <- broom::tidy(coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah))
     }
-    D <- map(D, ~mutate(., new_surv_time = pmin(toc, tod, tot, new_tow, na.rm=T)) %>% 
-               mutate(new_cens_type = case_when(toc == new_surv_time ~ 0, 
-                                                tod == new_surv_time ~ 1, 
-                                                tot == new_surv_time ~ 2, 
-                                                new_tow == new_surv_time ~ 3)) %>% 
-               mutate(new_surv_time = ifelse(new_cens_type==3, new_surv_time + 7, new_surv_time))) # take withdrawal to death
-    blah = bind_rows(D)
-    cox_models[[cnd]][[i]] <- broom::tidy(coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah))
   }
+  return(cox_models)
 }
 
-saveRDS(cox_models, file=file.path(dropdir,'sim_cox.rds'), compress = T)
+cox_models <- sim_fn(modeling_data2)
+#saveRDS(cox_models, file=file.path(dropdir,'sim_cox.rds'), compress = T)
+
+# Simulation study stratified by group --------------------------------------------------------
+modeling_data2_young <- modify_depth(modeling_data2, 2, ~filter(., age_at_event < 70) %>% 
+                                       mutate(agegrp_at_event = forcats::fct_drop(agegrp_at_event)))
+modeling_data2_old <- modify_depth(modeling_data2, 2, ~filter(., age_at_event >= 70) %>% 
+                                     mutate(agegrp_at_event = forcats::fct_drop(agegrp_at_event)))
+
+## Some summaries
+N_young <- modify_depth(modeling_data2_young, 1, ~map_df(., nrow)) %>% 
+  bind_rows(.id = 'Condition')
+N_old <- modify_depth(modeling_data2_old, 1, ~map_df(., nrow)) %>% 
+  bind_rows(.id = 'Condition')
+
+cox_models_young <- sim_fn(modeling_data2_young)
+cox_models_old <- sim_fn(modeling_data2_old)
+
+
+# Some plotting options -----------------------------------------------------------------------
+
 
 map(modeling_data2, ~bind_rows(.x) %>% 
       coxph(Surv(time_from_event, cens_type %in% c(1,3))~Race, data = .) %>% 
