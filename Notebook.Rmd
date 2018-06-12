@@ -201,3 +201,4 @@ death.
 1. Compute YLL for all ethnic groups due to normalizing discontinuation to Whites
 1. Create table 1 (All covariates in weib, + percentage of each outcome type, by race and overall)
 1. Add a bar for nominal HR on the simulation HR histograms
+1. Organize folder material 
