@@ -404,7 +404,6 @@ modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, toc:tow
 sim_fn <- function(dat_list, nsim = 1000){
   conds <- names(dat_list)
   cox_models <- list()
-  yll <- list()
   set.seed(10385)
   for (cnd in conds) {
     print(paste('Working on', cnd))
@@ -420,7 +419,6 @@ sim_fn <- function(dat_list, nsim = 1000){
     D$White <- D$White %>% mutate(new_tow = tow)
     
     cox_models[[cnd]] <- list()
-    yll[[cnd]] <- list()
     rw <- map(sc, ~matrix(rweibull(length(.)*nsim, shape = shp, scale = .), ncol = nsim, byrow = F))
     for (i in 1:nsim) {
       if(i %% 100 == 0) print(i)
@@ -435,18 +433,13 @@ sim_fn <- function(dat_list, nsim = 1000){
                  mutate(new_surv_time = ifelse(new_cens_type==3, new_surv_time + 7, new_surv_time))) # take withdrawal to death
       blah = bind_rows(D)
       cox_models[[cnd]][[i]] <- broom::tidy(coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah))
-      yll[[cnd]][[i]] <- blah %>% filter(new_cens_type %in% c(1,3)) %>% mutate(difftime = time_from_event - new_surv_time) %>% 
-        group_by(Race) %>% summarize(yll_tot = sum(pmax(0, difftime), na.rm=T), 
-                                     yll_avg = yll_tot / sum(new_cens_type %in% c(1,3))) %>% 
-        ungroup()
     }
   }
-  return(list('cox_models' = cox_models, 'yll' = yll))
+  return(cox_models)
 }
 
-cox_models <- sim_fn(modeling_data2)$cox_models
-yll <- sim_fn(modeling_data2)$yll
-#saveRDS(cox_models, file=file.path(dropdir,'sim_cox.rds'), compress = T)
+cox_models <- sim_fn(modeling_data2)
+saveRDS(cox_models, file.path(dropdir, 'cox_models.rds'), compress = T)
 
 # Simulation study stratified by group --------------------------------------------------------
 modeling_data2_young <- modify_depth(modeling_data2, 2, ~filter(., age_at_event < 70)) 
@@ -488,8 +481,57 @@ for(n in names(bl)){
 dev.off()
 
 
-# YLL computations ----------------------------------------------------------------------------
+# YLL and observed time computations ----------------------------------------------------------------------------
 
+sim_fn_yll <- function(dat_list, nsim = 1000){
+  conds <- names(dat_list)
+  yll <- list()
+  obstimes <- list()
+  set.seed(10385)
+  for (cnd in conds) {
+    print(paste('Working on', cnd))
+    D <- dat_list[[cnd]]
+    weib <- survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
+                      agegrp_at_event + SEX  + time_on_dialysis +
+                      zscore + comorb_indx, 
+                    data = D$White, 
+                    dist = 'weibull')
+    D <- map(D,  ~mutate_at(., vars(toc:tow), funs(as.numeric(.) - as.numeric(time_on_dialysis))))
+    shp <- 1/weib$scale
+    sc <- map(D, ~exp(predict(weib, newdata = ., type = 'lp')))
+    D$White <- D$White %>% mutate(new_tow = tow)
+    
+    yll[[cnd]] <- list()
+    obstimes[[cnd]] <- list()
+    rw <- map(sc, ~matrix(rweibull(length(.)*nsim, shape = shp, scale = .), ncol = nsim, byrow = F))
+    for (i in 1:nsim) {
+      if(i %% 100 == 0) print(i)
+      for(n in setdiff(names(D), 'White')){
+        D[[n]]$new_tow <- rw[[n]][,i]
+      }
+      D <- map(D, ~mutate(., new_surv_time = pmin(toc, tod, tot, new_tow, na.rm=T)) %>% 
+                 mutate(new_cens_type = case_when(toc == new_surv_time ~ 0, 
+                                                  tod == new_surv_time ~ 1, 
+                                                  tot == new_surv_time ~ 2, 
+                                                  new_tow == new_surv_time ~ 3)) %>% 
+                 mutate(new_surv_time = ifelse(new_cens_type==3, new_surv_time + 7, new_surv_time))) # take withdrawal to death
+      blah = bind_rows(D)
+      yll[[cnd]][[i]] <- blah %>% filter(new_cens_type == 3) %>% mutate(difftime = time_from_event - new_surv_time) %>% 
+        group_by(Race) %>% summarize(yll_tot = sum(pmax(0, difftime), na.rm=T), 
+                                     yll_avg = yll_tot / sum(new_cens_type == 3)) %>% 
+        ungroup()
+      obstimes[[cnd]][[i]] <- blah %>% group_by(Race) %>% summarize(total_obstime = sum(new_surv_time, na.rm=T)) %>% 
+        ungroup() %>% spread(Race, total_obstime)
+    }
+  }
+  return(list('obstimes' = obstimes, 'yll' = yll))
+}
+
+yll <- sim_fn_yll(modeling_data2)$yll
+
+bl = modify_depth(yll, 2,  ~filter(., Race != 'White') %>% 
+                    select(Race, yll_avg) %>% spread(Race, yll_avg)) %>% 
+  modify_depth(1, ~bind_rows(.))
 
 # Some plotting options -----------------------------------------------------------------------
 
