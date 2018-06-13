@@ -404,6 +404,7 @@ modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, toc:tow
 sim_fn <- function(dat_list, nsim = 1000){
   conds <- names(dat_list)
   cox_models <- list()
+  yll <- list()
   set.seed(10385)
   for (cnd in conds) {
     print(paste('Working on', cnd))
@@ -419,6 +420,7 @@ sim_fn <- function(dat_list, nsim = 1000){
     D$White <- D$White %>% mutate(new_tow = tow)
     
     cox_models[[cnd]] <- list()
+    yll[[cnd]] <- list()
     rw <- map(sc, ~matrix(rweibull(length(.)*nsim, shape = shp, scale = .), ncol = nsim, byrow = F))
     for (i in 1:nsim) {
       if(i %% 100 == 0) print(i)
@@ -433,12 +435,17 @@ sim_fn <- function(dat_list, nsim = 1000){
                  mutate(new_surv_time = ifelse(new_cens_type==3, new_surv_time + 7, new_surv_time))) # take withdrawal to death
       blah = bind_rows(D)
       cox_models[[cnd]][[i]] <- broom::tidy(coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah))
+      yll[[cnd]][[i]] <- blah %>% filter(new_cens_type %in% c(1,3)) %>% mutate(difftime = time_from_event - new_surv_time) %>% 
+        group_by(Race) %>% summarize(yll_tot = sum(pmax(0, difftime), na.rm=T), 
+                                     yll_avg = yll_tot / sum(new_cens_type %in% c(1,3))) %>% 
+        ungroup()
     }
   }
-  return(cox_models)
+  return(list('cox_models' = cox_models, 'yll' = yll))
 }
 
-cox_models <- sim_fn(modeling_data2)
+cox_models <- sim_fn(modeling_data2)$cox_models
+yll <- sim_fn(modeling_data2)$yll
 #saveRDS(cox_models, file=file.path(dropdir,'sim_cox.rds'), compress = T)
 
 # Simulation study stratified by group --------------------------------------------------------
@@ -451,8 +458,8 @@ N_young <- modify_depth(modeling_data2_young, 1, ~map_df(., nrow)) %>%
 N_old <- modify_depth(modeling_data2_old, 1, ~map_df(., nrow)) %>% 
   bind_rows(.id = 'Condition')
 
-cox_models_young <- sim_fn(modeling_data2_young)
-cox_models_old <- sim_fn(modeling_data2_old)
+cox_models_young <- sim_fn(modeling_data2_young)$cox_models
+cox_models_old <- sim_fn(modeling_data2_old)$cox_models
 
 bl <- modify_depth(cox_models_old, 2, ~select(., term, estimate) %>%
                      mutate(estimate = exp(estimate))) %>%
@@ -479,6 +486,10 @@ for(n in names(bl)){
           ggtitle(paste('Age 69-:', n)))
 }
 dev.off()
+
+
+# YLL computations ----------------------------------------------------------------------------
+
 
 # Some plotting options -----------------------------------------------------------------------
 
