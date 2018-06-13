@@ -527,12 +527,32 @@ sim_fn_yll <- function(dat_list, nsim = 1000){
   return(list('obstimes' = obstimes, 'yll' = yll))
 }
 
-yll <- sim_fn_yll(modeling_data2)$yll
-
+sim_results <- sim_fn_yll(modeling_data2)
+yll <- sim_results$yll
 bl = modify_depth(yll, 2,  ~filter(., Race != 'White') %>% 
                     select(Race, yll_avg) %>% spread(Race, yll_avg)) %>% 
-  modify_depth(1, ~bind_rows(.))
+  modify_depth(1, bind_rows)
 
+bl %>% map(~summarize_all(., mean) %>% mutate_all(funs(./30.42))) %>% bind_rows(.id='Condition')
+obstimes = sim_results$obstimes %>% 
+  modify_depth(1,bind_rows) %>% 
+  map(~summarize_all(., mean) %>% gather(Race, obs_times))
+
+nominal_obstimes <- map(modeling_data, ~mutate(., time_from_event = ifelse(cens_type ==3, time_from_event + 7, time_from_event)) %>% 
+                                                 group_by(Race) %>% 
+                                                 summarize(nominal_obstime = sum(time_from_event, na.rm=T)) %>% 
+                          ungroup() %>% 
+                          mutate(Race = as.character(Race)))
+
+Ns <- map(modeling_data2, ~map_df(., nrow) %>% gather(Race, N))
+final_tbl <- map2(nominal_obstimes, obstimes, ~inner_join(.x, .y, by='Race')) %>% 
+  map2(Ns, ~inner_join(.x, .y, by='Race')) %>% 
+  map(~mutate(., pct_change = 100*(nominal_obstime - obs_times)/nominal_obstime ,
+              avg_nominal_obstime = nominal_obstime / N / 365,
+              avg_obstime = obs_times/N/365))
+
+final_tbl %>% bind_rows(.id = 'Condition') %>% clean_cols(Condition) %>% 
+  openxlsx::write.xlsx('ObservationTimes.xlsx')
 # Some plotting options -----------------------------------------------------------------------
 
 
