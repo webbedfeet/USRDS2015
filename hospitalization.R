@@ -441,6 +441,18 @@ sim_fn <- function(dat_list, nsim = 1000){
 
 cox_models <- sim_fn(modeling_data2)
 saveRDS(cox_models, file.path(dropdir, 'cox_models.rds'), compress = T)
+bl <- modify_depth(cox_models, 2, ~select(., term, estimate) %>%
+                     mutate(estimate = exp(estimate))) %>%
+  map(~bind_rows(.) )
+bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
+pdf('SimulationResults.pdf')
+for(n in names(bl)){
+  print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
+          facet_wrap(~term, scales = 'free', nrow = 2)+
+          labs(x = 'Hazard ratio against Whites', y = '') + 
+          ggtitle(n))
+}
+dev.off()
 
 # Simulation study stratified by group --------------------------------------------------------
 modeling_data2_young <- modify_depth(modeling_data2, 2, ~filter(., age_at_event < 70)) 
@@ -452,8 +464,8 @@ N_young <- modify_depth(modeling_data2_young, 1, ~map_df(., nrow)) %>%
 N_old <- modify_depth(modeling_data2_old, 1, ~map_df(., nrow)) %>% 
   bind_rows(.id = 'Condition')
 
-cox_models_young <- sim_fn(modeling_data2_young)$cox_models
-cox_models_old <- sim_fn(modeling_data2_old)$cox_models
+cox_models_young <- sim_fn(modeling_data2_young)
+cox_models_old <- sim_fn(modeling_data2_old)
 
 bl <- modify_depth(cox_models_old, 2, ~select(., term, estimate) %>%
                      mutate(estimate = exp(estimate))) %>%
@@ -494,6 +506,7 @@ sim_fn_yll <- function(dat_list, nsim = 1000){
     D <- dat_list[[cnd]]
     weib <- survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
                       agegrp_at_event + SEX  + time_on_dialysis +
+                      factor(REGION)+
                       zscore + comorb_indx, 
                     data = D$White, 
                     dist = 'weibull')
