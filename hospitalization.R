@@ -528,31 +528,69 @@ sim_fn_yll <- function(dat_list, nsim = 1000){
 }
 
 sim_results <- sim_fn_yll(modeling_data2)
-yll <- sim_results$yll
-bl = modify_depth(yll, 2,  ~filter(., Race != 'White') %>% 
-                    select(Race, yll_avg) %>% spread(Race, yll_avg)) %>% 
-  modify_depth(1, bind_rows)
 
-bl %>% map(~summarize_all(., mean) %>% mutate_all(funs(./30.42))) %>% bind_rows(.id='Condition')
-obstimes = sim_results$obstimes %>% 
-  modify_depth(1,bind_rows) %>% 
-  map(~summarize_all(., mean) %>% gather(Race, obs_times))
+out_yll_fn <- function(simres){
+  yll <- simres$yll
+  
+  bl = modify_depth(yll, 2,  ~filter(., Race != 'White') %>% 
+                      select(Race, yll_avg) %>% spread(Race, yll_avg)) %>% 
+    modify_depth(1, bind_rows)
+  
+  bl %>% map(~summarize_all(., mean, na.rm=T) %>% mutate_all(funs(./30.42))) %>% bind_rows(.id='Condition')
+}
+yll <- out_yll_fn(sim_results)
 
+out_obstimes_fn <- function(simres, mod_data){
+  obstimes = simres$obstimes %>% 
+    modify_depth(1,bind_rows) %>% 
+    map(~summarize_all(., mean) %>% gather(Race, obs_times))
+  Ns <- map(mod_data, ~map_df(., nrow) %>% gather(Race, N))
+  mod_dat0 <- mod_data %>% modify_depth(1, bind_rows)
+  nominal_obstimes <- map(mod_dat0, ~mutate(., time_from_event = ifelse(cens_type ==3, time_from_event + 7, time_from_event)) %>% 
+                            group_by(Race) %>% 
+                            summarize(nominal_obstime = sum(time_from_event, na.rm=T)) %>% 
+                            ungroup() %>% 
+                            mutate(Race = as.character(Race)))
+final_tbl <- map2(nominal_obstimes, obstimes, ~inner_join(.x, .y, by='Race')) %>% 
+  map2(Ns, ~inner_join(.x, .y, by='Race')) %>% 
+  map(~mutate(., pct_change = 100*(nominal_obstime - obs_times)/nominal_obstime ,
+              avg_nominal_obstime = nominal_obstime / N / 30.42, # months
+              avg_obstime = obs_times/ N/ 30.42)) %>% # months
+  bind_rows(.id = 'Condition') %>% 
+  clean_cols(Condition) %>% 
+  set_names(c('Condition','Race','Nominal Obs Time (days)',
+              'Sim Obs Time (days)', 'N',
+              'Percent change',
+              'Avg Nominal Obs Time (months)',
+              'Avg Sim Obs Time (months)'))
+return(final_tbl)
+}
+
+obstimes <- out_obstimes_fn(simres)
 nominal_obstimes <- map(modeling_data, ~mutate(., time_from_event = ifelse(cens_type ==3, time_from_event + 7, time_from_event)) %>% 
                                                  group_by(Race) %>% 
                                                  summarize(nominal_obstime = sum(time_from_event, na.rm=T)) %>% 
                           ungroup() %>% 
                           mutate(Race = as.character(Race)))
 
-Ns <- map(modeling_data2, ~map_df(., nrow) %>% gather(Race, N))
-final_tbl <- map2(nominal_obstimes, obstimes, ~inner_join(.x, .y, by='Race')) %>% 
-  map2(Ns, ~inner_join(.x, .y, by='Race')) %>% 
-  map(~mutate(., pct_change = 100*(nominal_obstime - obs_times)/nominal_obstime ,
-              avg_nominal_obstime = nominal_obstime / N / 365,
-              avg_obstime = obs_times/N/365))
+final_tbl <- out_obstimes_fn(sim_results)
+## Repeat for stratified analyses
 
-final_tbl %>% bind_rows(.id = 'Condition') %>% clean_cols(Condition) %>% 
-  openxlsx::write.xlsx('ObservationTimes.xlsx')
+sim_results_young <- sim_fn_yll(modeling_data2_young)
+sim_results_old <- sim_fn_yll(modeling_data2_old)
+
+yll_young <- out_yll_fn(sim_results_young)
+yll_old <- out_yll_fn(sim_results_old)
+
+final_tbl_young = out_obstimes_fn(sim_results_young, modeling_data2_young)
+final_tbl_old = out_obstimes_fn(sim_results_old, modeling_data2_old)
+
+openxlsx::write.xlsx(list('Young' = final_tbl_young, 
+                          'Old' = final_tbl_old,
+                          'Young-YLL' = yll_young,
+                          'Old-YLL' = yll_old), 
+                     file='ObsTimeByAgegroup.xlsx',
+                     headerStyle = openxlsx::createStyle(textDecoration = 'BOLD'))
 # Some plotting options -----------------------------------------------------------------------
 
 
