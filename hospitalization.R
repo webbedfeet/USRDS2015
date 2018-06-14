@@ -394,7 +394,7 @@ for(n in names(modeling_data)){
 
 ## Data munging to add simulated withdrawal times
 
-modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, toc:tow), by ='USRDS_ID') %>% 
+modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, REGION, toc:tow), by ='USRDS_ID') %>% 
                         mutate_at(vars(toc:tow), funs(.*365.25)) %>% 
                         split(.$Race)) # convert times to days
 
@@ -409,7 +409,8 @@ sim_fn <- function(dat_list, nsim = 1000){
     print(paste('Working on', cnd))
     D <- dat_list[[cnd]]
     weib <- survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
-                      agegrp_at_event + SEX  + time_on_dialysis +
+                      agegrp_at_event + SEX  + time_on_dialysis + 
+                      factor(REGION)+
                       zscore + comorb_indx, 
                     data = D$White, 
                     dist = 'weibull')
@@ -592,7 +593,6 @@ openxlsx::write.xlsx(list('Young' = final_tbl_young,
                      file='ObsTimeByAgegroup.xlsx',
                      headerStyle = openxlsx::createStyle(textDecoration = 'BOLD'))
 # Some plotting options -----------------------------------------------------------------------
-
 
 map(modeling_data2, ~bind_rows(.x) %>% 
       coxph(Surv(time_from_event, cens_type %in% c(1,3))~Race, data = .) %>% 
