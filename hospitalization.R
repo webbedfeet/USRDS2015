@@ -427,7 +427,7 @@ sim_fn <- function(dat_list, nsim = 1000){
     
     cox_models[[cnd]] <- list()
     rw <- map(sc, ~matrix(rweibull(length(.)*nsim, shape = shp, scale = .), ncol = nsim, byrow = F))
-    cox_models[[cnd]] <- foreach (i = 1:nsim, .combine = c, .packages = c('tidyverse', 'broom', 'survival')) %dopar% {
+    cox_models[[cnd]] <- foreach (i = 1:nsim,  .packages = c('tidyverse', 'broom', 'survival')) %dopar% {
       # if(i %% 100 == 0) print(i)
       for(n in setdiff(names(D), 'White')){
         D[[n]]$new_tow <- rw[[n]][,i]
