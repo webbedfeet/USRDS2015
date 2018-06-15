@@ -528,7 +528,7 @@ sim_fn_yll <- function(dat_list, nsim = 1000){
     yll[[cnd]] <- list()
     obstimes[[cnd]] <- list()
     
-    yll[[cnd]] = foreach(i =  1:nsim, .packages = c('tidyverse')) %dopar% {
+    yll[[cnd]] = foreach (i = 1:nsim,  .packages = c('tidyverse', 'broom', 'survival')) %dopar% {
       for (n in setdiff(names(D), 'White')){
         D[[n]]$new_tow <- rw[[n]][,i]
       }
@@ -544,7 +544,7 @@ sim_fn_yll <- function(dat_list, nsim = 1000){
                                      yll_avg = yll_tot / sum(new_cens_type == 3)) %>% 
         ungroup()
     }
-    obstimes[[cnd]] <- foreach(i = 1:nsim, .packages = c('tidyverse')) %dopar% {
+    obstimes[[cnd]] <- foreach (i = 1:nsim,  .packages = c('tidyverse', 'broom', 'survival')) %dopar% {
       for (n in setdiff(names(D), 'White')){
         D[[n]]$new_tow <- rw[[n]][,i]
       }
@@ -573,7 +573,7 @@ out_yll_fn <- function(simres){
   
   bl %>% map(~summarize_all(., mean, na.rm=T) %>% mutate_all(funs(./30.42))) %>% bind_rows(.id='Condition')
 }
-yll <- out_yll_fn(sim_results)
+
 
 out_obstimes_fn <- function(simres, mod_data){
   obstimes = simres$obstimes %>% 
@@ -601,14 +601,16 @@ final_tbl <- map2(nominal_obstimes, obstimes, ~inner_join(.x, .y, by='Race')) %>
 return(final_tbl)
 }
 
-obstimes <- out_obstimes_fn(simres)
-nominal_obstimes <- map(modeling_data, ~mutate(., time_from_event = ifelse(cens_type ==3, time_from_event + 7, time_from_event)) %>% 
-                                                 group_by(Race) %>% 
-                                                 summarize(nominal_obstime = sum(time_from_event, na.rm=T)) %>% 
-                          ungroup() %>% 
-                          mutate(Race = as.character(Race)))
+# obstimes <- out_obstimes_fn(simres, modeling_data2)
+# nominal_obstimes <- map(modeling_data, ~mutate(., time_from_event = ifelse(cens_type ==3, time_from_event + 7, time_from_event)) %>% 
+#                                                  group_by(Race) %>% 
+#                                                  summarize(nominal_obstime = sum(time_from_event, na.rm=T)) %>% 
+#                           ungroup() %>% 
+#                           mutate(Race = as.character(Race)))
 
-final_tbl <- out_obstimes_fn(sim_results)
+yll <- out_yll_fn(sim_results)
+final_tbl <- out_obstimes_fn(sim_results, modeling_data2)
+
 ## Repeat for stratified analyses
 
 sim_results_young <- sim_fn_yll(modeling_data2_young)
@@ -620,12 +622,16 @@ yll_old <- out_yll_fn(sim_results_old)
 final_tbl_young = out_obstimes_fn(sim_results_young, modeling_data2_young)
 final_tbl_old = out_obstimes_fn(sim_results_old, modeling_data2_old)
 
-openxlsx::write.xlsx(list('Young' = final_tbl_young, 
+openxlsx::write.xlsx(list('Overall' = final_tbl,
+                          'Young' = final_tbl_young, 
                           'Old' = final_tbl_old,
+                          'Overall-YLL' = yll,
                           'Young-YLL' = yll_young,
                           'Old-YLL' = yll_old), 
-                     file='ObsTimeByAgegroup.xlsx',
+                     file='ObsTime.xlsx',
                      headerStyle = openxlsx::createStyle(textDecoration = 'BOLD'))
+
+
 # Some plotting options -----------------------------------------------------------------------
 
 
