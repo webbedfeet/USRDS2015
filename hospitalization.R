@@ -523,12 +523,13 @@ sim_fn_yll <- function(dat_list, nsim = 1000){
     sc <- map(D, ~exp(predict(weib, newdata = ., type = 'lp')))
     D$White <- D$White %>% mutate(new_tow = tow)
     
+    rw <- map(sc, ~matrix(rweibull(length(.)*nsim, shape = shp, scale = .), ncol = nsim, byrow = F)) # Generate random numbers
+    
     yll[[cnd]] <- list()
     obstimes[[cnd]] <- list()
-    rw <- map(sc, ~matrix(rweibull(length(.)*nsim, shape = shp, scale = .), ncol = nsim, byrow = F))
-    for (i in 1:nsim) {
-      if(i %% 100 == 0) print(i)
-      for(n in setdiff(names(D), 'White')){
+    
+    yll[[cnd]] = foreach(i =  1:nsim, .packages = c('tidyverse')) %dopar% {
+      for (n in setdiff(names(D), 'White')){
         D[[n]]$new_tow <- rw[[n]][,i]
       }
       D <- map(D, ~mutate(., new_surv_time = pmin(toc, tod, tot, new_tow, na.rm=T)) %>% 
@@ -538,11 +539,23 @@ sim_fn_yll <- function(dat_list, nsim = 1000){
                                                   new_tow == new_surv_time ~ 3)) %>% 
                  mutate(new_surv_time = ifelse(new_cens_type==3, new_surv_time + 7, new_surv_time))) # take withdrawal to death
       blah = bind_rows(D)
-      yll[[cnd]][[i]] <- blah %>% filter(new_cens_type == 3) %>% mutate(difftime = time_from_event - new_surv_time) %>% 
-        group_by(Race) %>% summarize(yll_tot = sum(pmax(0, difftime), na.rm=T), 
+      blah %>% filter(new_cens_type == 3) %>% mutate(difftime = time_from_event - new_surv_time) %>% 
+        group_by(Race) %>% summarize(yll_tot = sum(pmax(0, difftime), na.rm = T), 
                                      yll_avg = yll_tot / sum(new_cens_type == 3)) %>% 
         ungroup()
-      obstimes[[cnd]][[i]] <- blah %>% group_by(Race) %>% summarize(total_obstime = sum(new_surv_time, na.rm=T)) %>% 
+    }
+    obstimes[[cnd]] <- foreach(i = 1:nsim, .packages = c('tidyverse')) %dopar% {
+      for (n in setdiff(names(D), 'White')){
+        D[[n]]$new_tow <- rw[[n]][,i]
+      }
+      D <- map(D, ~mutate(., new_surv_time = pmin(toc, tod, tot, new_tow, na.rm=T)) %>% 
+                 mutate(new_cens_type = case_when(toc == new_surv_time ~ 0, 
+                                                  tod == new_surv_time ~ 1, 
+                                                  tot == new_surv_time ~ 2, 
+                                                  new_tow == new_surv_time ~ 3)) %>% 
+                 mutate(new_surv_time = ifelse(new_cens_type==3, new_surv_time + 7, new_surv_time))) # take withdrawal to death
+      blah = bind_rows(D)
+      blah %>% group_by(Race) %>% summarize(total_obstime = sum(new_surv_time, na.rm = T)) %>%
         ungroup() %>% spread(Race, total_obstime)
     }
   }
