@@ -361,7 +361,7 @@ Dat %>% filter(RACE2 != 'Other', cens_type == 3) %>%
 ## This is done in evaluate_comorbidities.R
 
 
-# Matching comorbidity score with time of index condition -------------------------------------
+# Data munging and generation: Matching comorbidity score with time of index condition -------------------------------------
 
 index_condn_comorbs <- readRDS(file.path(dropdir, 'index_condn_comorbs.rds'))
 hosp_post_dx <- readRDS(file.path(dropdir, 'final_hosp_data.rds'))
@@ -394,12 +394,19 @@ for(n in names(modeling_data)){
 
 ## Data munging to add simulated withdrawal times
 
-modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, toc:tow), by ='USRDS_ID') %>% 
+modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, toc:tow, REGION), by ='USRDS_ID') %>% 
                         mutate_at(vars(toc:tow), funs(.*365.25)) %>% 
                         split(.$Race)) # convert times to days
 
 
 # Simulation study ----------------------------------------------------------------------------
+library(foreach)
+library(parallel)
+library(doParallel)
+no_cores <- detectCores()-1
+cl <- makeCluster(no_cores)
+registerDoParallel(cl)
+
 
 sim_fn <- function(dat_list, nsim = 1000){
   conds <- names(dat_list)
@@ -409,7 +416,7 @@ sim_fn <- function(dat_list, nsim = 1000){
     print(paste('Working on', cnd))
     D <- dat_list[[cnd]]
     weib <- survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
-                      agegrp_at_event + SEX  + time_on_dialysis +
+                      agegrp_at_event + SEX  + time_on_dialysis + REGION +
                       zscore + comorb_indx, 
                     data = D$White, 
                     dist = 'weibull')
@@ -420,8 +427,8 @@ sim_fn <- function(dat_list, nsim = 1000){
     
     cox_models[[cnd]] <- list()
     rw <- map(sc, ~matrix(rweibull(length(.)*nsim, shape = shp, scale = .), ncol = nsim, byrow = F))
-    for (i in 1:nsim) {
-      if(i %% 100 == 0) print(i)
+    cox_models[[cnd]] <- foreach (i = 1:nsim, .combine = c, .packages = c('tidyverse', 'broom', 'survival')) %dopar% {
+      # if(i %% 100 == 0) print(i)
       for(n in setdiff(names(D), 'White')){
         D[[n]]$new_tow <- rw[[n]][,i]
       }
@@ -432,7 +439,8 @@ sim_fn <- function(dat_list, nsim = 1000){
                                                   new_tow == new_surv_time ~ 3)) %>% 
                  mutate(new_surv_time = ifelse(new_cens_type==3, new_surv_time + 7, new_surv_time))) # take withdrawal to death
       blah = bind_rows(D)
-      cox_models[[cnd]][[i]] <- broom::tidy(coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah))
+      # cox_models[[cnd]][[i]] <- broom::tidy(coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah))
+      broom::tidy(coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah))
     }
   }
   return(cox_models)
@@ -440,6 +448,20 @@ sim_fn <- function(dat_list, nsim = 1000){
 
 cox_models <- sim_fn(modeling_data2)
 saveRDS(cox_models, file.path(dropdir, 'cox_models.rds'), compress = T)
+
+bl <- modify_depth(cox_models, 2, ~select(., term, estimate) %>%
+                     mutate(estimate = exp(estimate))) %>%
+  map(~bind_rows(.) )
+bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
+pdf('SimulationResults.pdf')
+for(n in names(bl)){
+  print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
+          facet_wrap(~term, scales = 'free', nrow = 2)+
+          labs(x = 'Hazard ratio against Whites', y = '') + 
+          ggtitle(n))
+}
+dev.off()
+
 
 # Simulation study stratified by group --------------------------------------------------------
 modeling_data2_young <- modify_depth(modeling_data2, 2, ~filter(., age_at_event < 70)) 
@@ -492,7 +514,7 @@ sim_fn_yll <- function(dat_list, nsim = 1000){
     print(paste('Working on', cnd))
     D <- dat_list[[cnd]]
     weib <- survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
-                      agegrp_at_event + SEX  + time_on_dialysis +
+                      agegrp_at_event + SEX  + time_on_dialysis + REGION+
                       zscore + comorb_indx, 
                     data = D$White, 
                     dist = 'weibull')
@@ -633,19 +655,6 @@ map(modeling_data2, ~bind_rows(.x) %>%
   mutate(term = str_remove(term, 'Race')) %>% 
   rename(Race = term) %>% 
   openxlsx::write.xlsx('Original_HR.xlsx')
-
-bl <- modify_depth(cox_models, 2, ~select(., term, estimate) %>%
-mutate(estimate = exp(estimate))) %>%
-map(~bind_rows(.) )
-bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
-pdf('SimulationResults.pdf')
-for(n in names(bl)){
-  print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
-          facet_wrap(~term, scales = 'free', nrow = 2)+
-          labs(x = 'Hazard ratio against Whites', y = '') + 
-          ggtitle(n))
-}
-dev.off()
 
 
 # TODO: Do some residual analysis and validation of White Weibull model
