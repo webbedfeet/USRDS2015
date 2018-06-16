@@ -41,7 +41,7 @@ stroke <- dbs %>%
   })
 
 stroke_primary <- stroke %>%
-  lapply(., function(db) db %>%  select(USRDS_ID, CLM_FROM, CLM_THRU)) %>% bind_rows() %>% distinct() %>% 
+  lapply(., function(db) db %>%  select(USRDS_ID, CLM_FROM, CLM_THRU)) %>% bind_rows() %>% distinct() %>%
   mutate(dt = date_midpt(CLM_FROM, CLM_THRU))
 head(stroke_primary)
 # Stroke with complications -----------------------------------------------
@@ -64,11 +64,11 @@ head(stroke_compl)
 LuCa <- dbs %>%
   lapply(., function(db){
     db %>% mutate(PRIM = substr(HSDIAG1,1,3)) %>%
-      filter(PRIM=='162') %>% 
+      filter(PRIM=='162') %>%
       inner_join(studyids) %>% # Keep only individuals in earlier study
       select(USRDS_ID, CLM_FROM, CLM_THRU) %>% collect(n=Inf)
   }) %>%
-  bind_rows() %>% distinct() %>% 
+  bind_rows() %>% distinct() %>%
   mutate(dt = date_midpt(CLM_FROM, CLM_THRU))
 head(LuCa)
 # Metastatic cancer -------------------------------------------------------
@@ -77,7 +77,7 @@ MetsCa <- dbs %>%
   lapply(., function(db){
   db %>% mutate(PRIM=substr(HSDIAG1,1,3)) %>%
     filter(PRIM== '196' | PRIM == '197' | PRIM == '198' | PRIM == '199') %>%
-      inner_join(studyids) %>% 
+      inner_join(studyids) %>%
     select(USRDS_ID, CLM_FROM, CLM_THRU) %>% collect(n = Inf)}) %>%
   bind_rows() %>%
   distinct() %>% mutate(dt = date_midpt(CLM_FROM, CLM_THRU))
@@ -126,7 +126,7 @@ for (sql in sqlist){
     dement[[i]] <-d %>% gather(hsdiag, code, -USRDS_ID, -CLM_FROM, -CLM_THRU) %>%
                    filter(str_detect(code, '^290|^2941|^331[012]')) %>%
                    select(USRDS_ID, CLM_FROM, CLM_THRU) %>%
-                   # distinct() %>% inner_join(StudyIDS) %>% 
+                   # distinct() %>% inner_join(StudyIDS) %>%
                    as.data.frame()
   }
   dbClearResult(rs)
@@ -183,19 +183,19 @@ dbDisconnect(sql_conn); gc()
 ProjTemplate::reload()
 hospitalization <- readRDS('data/hospitalization_ids.rds')
 Dat <- readRDS('data/rda/Analytic.rds')
-Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>% 
+Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>%
   mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
 
-hosp_post_dx <- 
-  map(hospitalization, ~ .x %>% 
-        mutate(CLM_FROM = as.Date(CLM_FROM)) %>% 
-        left_join(Dat %>% select(USRDS_ID, FIRST_SE, surv_date, cens_type, RACE2)) %>% 
-        filter(CLM_FROM >= FIRST_SE, CLM_FROM <= surv_date) %>% 
-        group_by(USRDS_ID) %>% 
-        top_n(-1, CLM_FROM) %>% 
-        top_n(-1, CLM_THRU) %>% 
-        # select(-FIRST_SE, -surv_date) %>% 
-        distinct() %>% 
+hosp_post_dx <-
+  map(hospitalization, ~ .x %>%
+        mutate(CLM_FROM = as.Date(CLM_FROM)) %>%
+        left_join(Dat %>% select(USRDS_ID, FIRST_SE, surv_date, cens_type, RACE2)) %>%
+        filter(CLM_FROM >= FIRST_SE, CLM_FROM <= surv_date) %>%
+        group_by(USRDS_ID) %>%
+        top_n(-1, CLM_FROM) %>%
+        top_n(-1, CLM_THRU) %>%
+        # select(-FIRST_SE, -surv_date) %>%
+        distinct() %>%
         ungroup())
 
 saveRDS(hosp_post_dx, 'data/rda/final_hosp_data.rds', compress = T)
@@ -206,38 +206,38 @@ saveRDS(hosp_post_dx, file.path(dropdir, 'final_hosp_data.rds'), compress = T)
 #' what's the chance of discontinuation, by race
 hosp_post_dx <- readRDS(file.path(dropdir,'final_hosp_data.rds'))
 Dat <- readRDS('data/rda/Analytic.rds')
-Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>% 
+Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>%
   mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
 
 hosp_postdx_age <- map(
   hosp_post_dx,
-  ~.x %>% left_join(Dat %>% select(USRDS_ID, INC_AGE)) %>% 
+  ~.x %>% left_join(Dat %>% select(USRDS_ID, INC_AGE)) %>%
     mutate(se_to_event_time = CLM_FROM - FIRST_SE,
-           age_at_event = floor(INC_AGE + se_to_event_time/365.25))  %>% 
-    mutate(agegrp_at_event = cut_width(age_at_event, width=10, boundary=10, closed='left')) %>% 
-    mutate(agegrp_at_event = 
+           age_at_event = floor(INC_AGE + se_to_event_time/365.25))  %>%
+    mutate(agegrp_at_event = cut_width(age_at_event, width=10, boundary=10, closed='left')) %>%
+    mutate(agegrp_at_event =
              forcats::fct_collapse(agegrp_at_event,
                                    '<40' = intersect(levels(agegrp_at_event),c('[10,20)','[20,30)','[30,40)')),
                                    '80+' = intersect(levels(agegrp_at_event),
                                                      c('[80,90)','[90,100)','[90,100]','[100,110]')))))
 
-out1 <- map(hosp_postdx_age, ~.x %>% 
-      group_by(agegrp_at_event, RACE2) %>% 
-      summarize(prop_withdrew = round(mean(cens_type==3), 3), N = n()) %>% 
-      ungroup()) %>% 
-  bind_rows(.id = 'index_event') %>% 
-  filter(!is.na(RACE2)) %>% 
-  unite(out, c('prop_withdrew','N'), sep=' / ') %>% 
-  spread(agegrp_at_event, out) %>% 
-  mutate(index_event = transform_indx(index_event)) %>% 
+out1 <- map(hosp_postdx_age, ~.x %>%
+      group_by(agegrp_at_event, RACE2) %>%
+      summarize(prop_withdrew = round(mean(cens_type==3), 3), N = n()) %>%
+      ungroup()) %>%
+  bind_rows(.id = 'index_event') %>%
+  filter(!is.na(RACE2)) %>%
+  unite(out, c('prop_withdrew','N'), sep=' / ') %>%
+  spread(agegrp_at_event, out) %>%
+  mutate(index_event = transform_indx(index_event)) %>%
  rename(`Index event`=index_event, Race=RACE2)
 
 out2 <- map(hosp_post_dx, ~.x %>% group_by(RACE2) %>% summarise(prop_withdrew = mean(cens_type==3),
-                                                        N = n())) %>% 
-  bind_rows(.id='index_condition') %>% 
-  filter(!is.na(RACE2)) %>% 
-  mutate(index_condition = transform_indx(index_condition)) %>% 
-  mutate(prop_withdrew = round(prop_withdrew,3)) %>% 
+                                                        N = n())) %>%
+  bind_rows(.id='index_condition') %>%
+  filter(!is.na(RACE2)) %>%
+  mutate(index_condition = transform_indx(index_condition)) %>%
+  mutate(prop_withdrew = round(prop_withdrew,3)) %>%
   unite(Overall, c('prop_withdrew', 'N'), sep = ' / ')
 
 out <- left_join(out1, out2, by=c("Index event" = 'index_condition','Race'='RACE2'))
@@ -247,15 +247,15 @@ openxlsx::write.xlsx(out, file='Withdrawal_age_race.xlsx')
 
 # Median time after index condition to discontinuation ----------------------------------------
 
-map(hosp_postdx_age, ~.x %>% 
+map(hosp_postdx_age, ~.x %>%
       mutate(time_to_wd = as.numeric(surv_date - CLM_FROM)) %>% # time between dialysis and withdrawal
-      group_by(agegrp_at_event, RACE2) %>% 
-      summarise(median_time = median(time_to_wd, na.rm=T))) %>% 
-  bind_rows(.id = 'index_condition') %>% 
-  filter(!is.na(RACE2)) %>% 
-  spread(agegrp_at_event, median_time) %>% 
-  mutate(index_condition = transform_indx(index_condition)) %>% 
-  rename('Index event' = 'index_condition', 'Race' = 'RACE2') %>% 
+      group_by(agegrp_at_event, RACE2) %>%
+      summarise(median_time = median(time_to_wd, na.rm=T))) %>%
+  bind_rows(.id = 'index_condition') %>%
+  filter(!is.na(RACE2)) %>%
+  spread(agegrp_at_event, median_time) %>%
+  mutate(index_condition = transform_indx(index_condition)) %>%
+  rename('Index event' = 'index_condition', 'Race' = 'RACE2') %>%
   openxlsx::write.xlsx(file = 'Time_to_withdrawal.xlsx')
 
 
@@ -266,13 +266,13 @@ map(hosp_postdx_age, ~.x %>%
 ## Cox regression from time of even to time of withdrawal, as a cause-specific hazard estimation
 ## problem
 
-hosp_cox_data <- 
-  map(hosp_postdx_age, ~.x %>% 
-        left_join(select(Dat,  SEX, zscore, USRDS_ID)) %>% 
-        mutate(time_from_event = as.numeric(surv_date-CLM_FROM)) %>% 
-        mutate(time_on_dialysis = se_to_event_time) %>% 
-        rename('Race' = "RACE2") %>% 
-        filter(Race != 'Other') %>% 
+hosp_cox_data <-
+  map(hosp_postdx_age, ~.x %>%
+        left_join(select(Dat,  SEX, zscore, USRDS_ID)) %>%
+        mutate(time_from_event = as.numeric(surv_date-CLM_FROM)) %>%
+        mutate(time_on_dialysis = se_to_event_time) %>%
+        rename('Race' = "RACE2") %>%
+        filter(Race != 'Other') %>%
         mutate(Race = droplevels(Race)))
 
 # names(hosp_cox_data) <- c('Primary stroke','Stroke with complications',
@@ -282,9 +282,9 @@ saveRDS(hosp_cox_data, file.path(dropdir, 'hosp_cox_data.rds'), compress = T)
 
 ## Kaplan Meier curves
 
-fit_list = map(hosp_cox_data, ~survfit(Surv(time_from_event, cens_type==3)~ Race, 
+fit_list = map(hosp_cox_data, ~survfit(Surv(time_from_event, cens_type==3)~ Race,
                                        data = .))
-cph1_list <-  map(hosp_cox_data, ~ coxph(Surv(time_from_event, cens_type==3)~ Race, 
+cph1_list <-  map(hosp_cox_data, ~ coxph(Surv(time_from_event, cens_type==3)~ Race,
                                          data = .))
 logrank_list <- map(cph1_list, ~format.pval(anova(.)[2,4], eps=1e-6))
 plt_list <- vector('list',6)
@@ -304,16 +304,16 @@ dev.off()
 
 #'  Cox regressions adjusting for age at event, gender, race, z-score and time on dialysis at time of event
 hosp_coxph <- map(hosp_cox_data,
-                  ~ coxph(Surv(time_from_event, cens_type==3)~Race + agegrp_at_event + SEX + zscore + 
-                            time_on_dialysis, data = .) %>% 
-                    broom::tidy() %>% 
-                    filter(str_detect(term, 'Race')) %>% 
-                    select(term, estimate, p.value:conf.high) %>% 
-                    mutate(term = str_remove(term, 'Race')) %>% 
+                  ~ coxph(Surv(time_from_event, cens_type==3)~Race + agegrp_at_event + SEX + zscore +
+                            time_on_dialysis, data = .) %>%
+                    broom::tidy() %>%
+                    filter(str_detect(term, 'Race')) %>%
+                    select(term, estimate, p.value:conf.high) %>%
+                    mutate(term = str_remove(term, 'Race')) %>%
                     mutate_at(vars(estimate, conf.low:conf.high), exp))
-bind_rows(hosp_coxph, .id = 'index_event') %>% 
+bind_rows(hosp_coxph, .id = 'index_event') %>%
   ggplot(aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high))+
-    geom_pointrange() + 
+    geom_pointrange() +
     geom_hline(yintercept = 1, linetype =3)+
     facet_wrap(~index_event, nrow=2) +
     theme(axis.text.x = element_text(angle = 45, hjust=1)) +
@@ -321,7 +321,7 @@ bind_rows(hosp_coxph, .id = 'index_event') %>%
     labs(x = '') +
     ggsave('ForestPlot.pdf')
 
-bind_rows(hosp_coxph, .id = 'Index event') %>% 
+bind_rows(hosp_coxph, .id = 'Index event') %>%
   openxlsx::write.xlsx('CoxPH.xlsx')
 
 # TODO: Figure out which analysis makes the most sense
@@ -332,27 +332,27 @@ bind_rows(hosp_coxph, .id = 'Index event') %>%
 ProjTemplate::reload()
 hospitalization <- readRDS('data/hospitalization_ids.rds')
 Dat <- readRDS('data/rda/Analytic.rds')
-Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>% 
+Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>%
   mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
 
-Dat <- Dat %>% 
+Dat <- Dat %>%
   mutate(withdraw_to_death = ifelse(cens_type==3 & !is.na(BEGIN_withdraw),
                                     tod - tow, NA))
 Dat %>% filter(RACE2 != 'Other') %>% ggplot(aes(x = RACE2, y = withdraw_to_death))+geom_boxplot()
-Dat %>% filter(RACE2 != 'Other', cens_type==3) %>% 
-  kruskal.test(withdraw_to_death~RACE2, data=.) %>% 
+Dat %>% filter(RACE2 != 'Other', cens_type==3) %>%
+  kruskal.test(withdraw_to_death~RACE2, data=.) %>%
   broom::tidy()
-Dat %>% filter(RACE2 != 'Other', cens_type == 3) %>% 
+Dat %>% filter(RACE2 != 'Other', cens_type == 3) %>%
   ggplot(aes(x = withdraw_to_death*365.25))+
     geom_density(aes(group = RACE2, color = RACE2)) +
     xlim(0,100)
-Dat %>% filter(RACE2 != 'Other', cens_type == 3) %>% 
-  group_by(RACE2) %>% 
+Dat %>% filter(RACE2 != 'Other', cens_type == 3) %>%
+  group_by(RACE2) %>%
   summarise(med_surv = median(365*withdraw_to_death, na.rm=T))
 
 # TODO: Sensitivity of all results to imputation of withdrawal time
-# This means, we assumed, if withdrawal data is missing, that we used 7 days before death. 
-# We should see how our results hold up if we impute the withdrawal date as 
+# This means, we assumed, if withdrawal data is missing, that we used 7 days before death.
+# We should see how our results hold up if we impute the withdrawal date as
 # (a) the date of death
 # (b) randomly drawn from race-specific distribution
 
@@ -361,7 +361,7 @@ Dat %>% filter(RACE2 != 'Other', cens_type == 3) %>%
 ## This is done in evaluate_comorbidities.R
 
 
-# Matching comorbidity score with time of index condition -------------------------------------
+# Data munging and generation: Matching comorbidity score with time of index condition -------------------------------------
 
 index_condn_comorbs <- readRDS(file.path(dropdir, 'index_condn_comorbs.rds'))
 hosp_post_dx <- readRDS(file.path(dropdir, 'final_hosp_data.rds'))
@@ -371,19 +371,19 @@ for (n in names(hosp_post_dx)){
   print(paste('Working on ', n))
   d <- index_condn_comorbs[[n]] %>% select(USRDS_ID:CLM_THRU, comorb_indx)
   hosp_post_dx[[n]] %>% mutate(CLM_FROM = as.character(CLM_FROM),
-                               CLM_THRU = as.character(CLM_THRU)) %>% 
-    left_join(d) %>% 
-    group_by(USRDS_ID) %>% 
-    filter(comorb_indx == max(comorb_indx)) %>% 
-    ungroup() %>% 
+                               CLM_THRU = as.character(CLM_THRU)) %>%
+    left_join(d) %>%
+    group_by(USRDS_ID) %>%
+    filter(comorb_indx == max(comorb_indx)) %>%
+    ungroup() %>%
     distinct() -> out[[n]]
 }
 assertthat::are_equal(map_int(hosp_post_dx, nrow), map_int(out, nrow))
 hosp_post_dx <- out
 
-# TODO: Model time to withdrawal as a function of age, sex, race, time to 
+# TODO: Model time to withdrawal as a function of age, sex, race, time to
 # index condition from FIRST_SE and comorbidity score, using parametric survival models
-# 
+#
 
 Dat <- readRDS('data/rda/Analytic.rds')
 hosp_cox_data <- readRDS(file.path(dropdir, 'hosp_cox_data.rds'))
@@ -394,12 +394,19 @@ for(n in names(modeling_data)){
 
 ## Data munging to add simulated withdrawal times
 
-modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, REGION, toc:tow), by ='USRDS_ID') %>% 
-                        mutate_at(vars(toc:tow), funs(.*365.25)) %>% 
+modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, REGION, toc:tow), by ='USRDS_ID') %>%
+                        mutate_at(vars(toc:tow), funs(.*365.25)) %>%
                         split(.$Race)) # convert times to days
 
 
 # Simulation study ----------------------------------------------------------------------------
+library(foreach)
+library(parallel)
+library(doParallel)
+no_cores <- detectCores()-1
+cl <- makeCluster(no_cores)
+registerDoParallel(cl)
+
 
 sim_fn <- function(dat_list, nsim = 1000){
   conds <- names(dat_list)
@@ -409,31 +416,32 @@ sim_fn <- function(dat_list, nsim = 1000){
     print(paste('Working on', cnd))
     D <- dat_list[[cnd]]
     weib <- survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
-                      agegrp_at_event + SEX  + time_on_dialysis + 
+                      agegrp_at_event + SEX  + time_on_dialysis +
                       factor(REGION)+
-                      zscore + comorb_indx, 
-                    data = D$White, 
+                      zscore + comorb_indx,
+                    data = D$White,
                     dist = 'weibull')
     D <- map(D,  ~mutate_at(., vars(toc:tow), funs(as.numeric(.) - as.numeric(time_on_dialysis))))
     shp <- 1/weib$scale
     sc <- map(D, ~exp(predict(weib, newdata = ., type = 'lp')))
     D$White <- D$White %>% mutate(new_tow = tow)
-    
+
     cox_models[[cnd]] <- list()
     rw <- map(sc, ~matrix(rweibull(length(.)*nsim, shape = shp, scale = .), ncol = nsim, byrow = F))
-    for (i in 1:nsim) {
-      if(i %% 100 == 0) print(i)
+    cox_models[[cnd]] <- foreach (i = 1:nsim,  .packages = c('tidyverse', 'broom', 'survival')) %dopar% {
+      # if(i %% 100 == 0) print(i)
       for(n in setdiff(names(D), 'White')){
         D[[n]]$new_tow <- rw[[n]][,i]
       }
-      D <- map(D, ~mutate(., new_surv_time = pmin(toc, tod, tot, new_tow, na.rm=T)) %>% 
-                 mutate(new_cens_type = case_when(toc == new_surv_time ~ 0, 
-                                                  tod == new_surv_time ~ 1, 
-                                                  tot == new_surv_time ~ 2, 
-                                                  new_tow == new_surv_time ~ 3)) %>% 
+      D <- map(D, ~mutate(., new_surv_time = pmin(toc, tod, tot, new_tow, na.rm=T)) %>%
+                 mutate(new_cens_type = case_when(toc == new_surv_time ~ 0,
+                                                  tod == new_surv_time ~ 1,
+                                                  tot == new_surv_time ~ 2,
+                                                  new_tow == new_surv_time ~ 3)) %>%
                  mutate(new_surv_time = ifelse(new_cens_type==3, new_surv_time + 7, new_surv_time))) # take withdrawal to death
       blah = bind_rows(D)
-      cox_models[[cnd]][[i]] <- broom::tidy(coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah))
+      # cox_models[[cnd]][[i]] <- broom::tidy(coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah))
+      broom::tidy(coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~Race, data = blah))
     }
   }
   return(cox_models)
@@ -449,19 +457,33 @@ pdf('SimulationResults.pdf')
 for(n in names(bl)){
   print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
           facet_wrap(~term, scales = 'free', nrow = 2)+
-          labs(x = 'Hazard ratio against Whites', y = '') + 
+          labs(x = 'Hazard ratio against Whites', y = '') +
           ggtitle(n))
 }
 dev.off()
 
+bl <- modify_depth(cox_models, 2, ~select(., term, estimate) %>%
+                     mutate(estimate = exp(estimate))) %>%
+  map(~bind_rows(.) )
+bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
+pdf('SimulationResults.pdf')
+for(n in names(bl)){
+  print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
+          facet_wrap(~term, scales = 'free', nrow = 2)+
+          labs(x = 'Hazard ratio against Whites', y = '') +
+          ggtitle(n))
+}
+dev.off()
+
+
 # Simulation study stratified by group --------------------------------------------------------
-modeling_data2_young <- modify_depth(modeling_data2, 2, ~filter(., age_at_event < 70)) 
+modeling_data2_young <- modify_depth(modeling_data2, 2, ~filter(., age_at_event < 70))
 modeling_data2_old <- modify_depth(modeling_data2, 2, ~filter(., age_at_event >= 70))
 
 ## Some summaries
-N_young <- modify_depth(modeling_data2_young, 1, ~map_df(., nrow)) %>% 
+N_young <- modify_depth(modeling_data2_young, 1, ~map_df(., nrow)) %>%
   bind_rows(.id = 'Condition')
-N_old <- modify_depth(modeling_data2_old, 1, ~map_df(., nrow)) %>% 
+N_old <- modify_depth(modeling_data2_old, 1, ~map_df(., nrow)) %>%
   bind_rows(.id = 'Condition')
 
 cox_models_young <- sim_fn(modeling_data2_young)
@@ -475,7 +497,7 @@ pdf('SimulationResults_old.pdf')
 for(n in names(bl)){
   print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
           facet_wrap(~term, scales = 'free', nrow = 2)+
-          labs(x = 'Hazard ratio against Whites', y = '') + 
+          labs(x = 'Hazard ratio against Whites', y = '') +
           ggtitle(paste('Age 70+:', n)))
 }
 dev.off()
@@ -488,7 +510,7 @@ pdf('SimulationResults_young.pdf')
 for(n in names(bl)){
   print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
           facet_wrap(~term, scales = 'free', nrow = 2)+
-          labs(x = 'Hazard ratio against Whites', y = '') + 
+          labs(x = 'Hazard ratio against Whites', y = '') +
           ggtitle(paste('Age 69-:', n)))
 }
 dev.off()
@@ -507,34 +529,47 @@ sim_fn_yll <- function(dat_list, nsim = 1000){
     weib <- survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
                       agegrp_at_event + SEX  + time_on_dialysis +
                       factor(REGION)+
-                      zscore + comorb_indx, 
-                    data = D$White, 
+                      zscore + comorb_indx,
+                    data = D$White,
                     dist = 'weibull')
     D <- map(D,  ~mutate_at(., vars(toc:tow), funs(as.numeric(.) - as.numeric(time_on_dialysis))))
     shp <- 1/weib$scale
     sc <- map(D, ~exp(predict(weib, newdata = ., type = 'lp')))
     D$White <- D$White %>% mutate(new_tow = tow)
-    
+
+    rw <- map(sc, ~matrix(rweibull(length(.)*nsim, shape = shp, scale = .), ncol = nsim, byrow = F)) # Generate random numbers
+
     yll[[cnd]] <- list()
     obstimes[[cnd]] <- list()
-    rw <- map(sc, ~matrix(rweibull(length(.)*nsim, shape = shp, scale = .), ncol = nsim, byrow = F))
-    for (i in 1:nsim) {
-      if(i %% 100 == 0) print(i)
-      for(n in setdiff(names(D), 'White')){
+
+    yll[[cnd]] = foreach (i = 1:nsim,  .packages = c('tidyverse', 'broom', 'survival')) %dopar% {
+      for (n in setdiff(names(D), 'White')){
         D[[n]]$new_tow <- rw[[n]][,i]
       }
-      D <- map(D, ~mutate(., new_surv_time = pmin(toc, tod, tot, new_tow, na.rm=T)) %>% 
-                 mutate(new_cens_type = case_when(toc == new_surv_time ~ 0, 
-                                                  tod == new_surv_time ~ 1, 
-                                                  tot == new_surv_time ~ 2, 
-                                                  new_tow == new_surv_time ~ 3)) %>% 
+      D <- map(D, ~mutate(., new_surv_time = pmin(toc, tod, tot, new_tow, na.rm=T)) %>%
+                 mutate(new_cens_type = case_when(toc == new_surv_time ~ 0,
+                                                  tod == new_surv_time ~ 1,
+                                                  tot == new_surv_time ~ 2,
+                                                  new_tow == new_surv_time ~ 3)) %>%
                  mutate(new_surv_time = ifelse(new_cens_type==3, new_surv_time + 7, new_surv_time))) # take withdrawal to death
       blah = bind_rows(D)
-      yll[[cnd]][[i]] <- blah %>% filter(new_cens_type == 3) %>% mutate(difftime = time_from_event - new_surv_time) %>% 
-        group_by(Race) %>% summarize(yll_tot = sum(pmax(0, difftime), na.rm=T), 
-                                     yll_avg = yll_tot / sum(new_cens_type == 3)) %>% 
+      blah %>% filter(new_cens_type == 3) %>% mutate(difftime = time_from_event - new_surv_time) %>%
+        group_by(Race) %>% summarize(yll_tot = sum(pmax(0, difftime), na.rm = T),
+                                     yll_avg = yll_tot / sum(new_cens_type == 3)) %>%
         ungroup()
-      obstimes[[cnd]][[i]] <- blah %>% group_by(Race) %>% summarize(total_obstime = sum(new_surv_time, na.rm=T)) %>% 
+    }
+    obstimes[[cnd]] <- foreach (i = 1:nsim,  .packages = c('tidyverse', 'broom', 'survival')) %dopar% {
+      for (n in setdiff(names(D), 'White')){
+        D[[n]]$new_tow <- rw[[n]][,i]
+      }
+      D <- map(D, ~mutate(., new_surv_time = pmin(toc, tod, tot, new_tow, na.rm=T)) %>%
+                 mutate(new_cens_type = case_when(toc == new_surv_time ~ 0,
+                                                  tod == new_surv_time ~ 1,
+                                                  tot == new_surv_time ~ 2,
+                                                  new_tow == new_surv_time ~ 3)) %>%
+                 mutate(new_surv_time = ifelse(new_cens_type==3, new_surv_time + 7, new_surv_time))) # take withdrawal to death
+      blah = bind_rows(D)
+      blah %>% group_by(Race) %>% summarize(total_obstime = sum(new_surv_time, na.rm = T)) %>%
         ungroup() %>% spread(Race, total_obstime)
     }
   }
@@ -545,33 +580,33 @@ sim_results <- sim_fn_yll(modeling_data2)
 
 out_yll_fn <- function(simres){
   yll <- simres$yll
-  
-  bl = modify_depth(yll, 2,  ~filter(., Race != 'White') %>% 
-                      select(Race, yll_avg) %>% spread(Race, yll_avg)) %>% 
+
+  bl = modify_depth(yll, 2,  ~filter(., Race != 'White') %>%
+                      select(Race, yll_avg) %>% spread(Race, yll_avg)) %>%
     modify_depth(1, bind_rows)
-  
+
   bl %>% map(~summarize_all(., mean, na.rm=T) %>% mutate_all(funs(./30.42))) %>% bind_rows(.id='Condition')
 }
-yll <- out_yll_fn(sim_results)
+
 
 out_obstimes_fn <- function(simres, mod_data){
-  obstimes = simres$obstimes %>% 
-    modify_depth(1,bind_rows) %>% 
+  obstimes = simres$obstimes %>%
+    modify_depth(1,bind_rows) %>%
     map(~summarize_all(., mean) %>% gather(Race, obs_times))
   Ns <- map(mod_data, ~map_df(., nrow) %>% gather(Race, N))
   mod_dat0 <- mod_data %>% modify_depth(1, bind_rows)
-  nominal_obstimes <- map(mod_dat0, ~mutate(., time_from_event = ifelse(cens_type ==3, time_from_event + 7, time_from_event)) %>% 
-                            group_by(Race) %>% 
-                            summarize(nominal_obstime = sum(time_from_event, na.rm=T)) %>% 
-                            ungroup() %>% 
+  nominal_obstimes <- map(mod_dat0, ~mutate(., time_from_event = ifelse(cens_type ==3, time_from_event + 7, time_from_event)) %>%
+                            group_by(Race) %>%
+                            summarize(nominal_obstime = sum(time_from_event, na.rm=T)) %>%
+                            ungroup() %>%
                             mutate(Race = as.character(Race)))
-final_tbl <- map2(nominal_obstimes, obstimes, ~inner_join(.x, .y, by='Race')) %>% 
-  map2(Ns, ~inner_join(.x, .y, by='Race')) %>% 
+final_tbl <- map2(nominal_obstimes, obstimes, ~inner_join(.x, .y, by='Race')) %>%
+  map2(Ns, ~inner_join(.x, .y, by='Race')) %>%
   map(~mutate(., pct_change = 100*(nominal_obstime - obs_times)/nominal_obstime ,
               avg_nominal_obstime = nominal_obstime / N / 30.42, # months
               avg_obstime = obs_times/ N/ 30.42)) %>% # months
-  bind_rows(.id = 'Condition') %>% 
-  clean_cols(Condition) %>% 
+  bind_rows(.id = 'Condition') %>%
+  clean_cols(Condition) %>%
   set_names(c('Condition','Race','Nominal Obs Time (days)',
               'Sim Obs Time (days)', 'N',
               'Percent change',
@@ -580,14 +615,16 @@ final_tbl <- map2(nominal_obstimes, obstimes, ~inner_join(.x, .y, by='Race')) %>
 return(final_tbl)
 }
 
-obstimes <- out_obstimes_fn(simres)
-nominal_obstimes <- map(modeling_data, ~mutate(., time_from_event = ifelse(cens_type ==3, time_from_event + 7, time_from_event)) %>% 
-                                                 group_by(Race) %>% 
-                                                 summarize(nominal_obstime = sum(time_from_event, na.rm=T)) %>% 
-                          ungroup() %>% 
-                          mutate(Race = as.character(Race)))
+# obstimes <- out_obstimes_fn(simres, modeling_data2)
+# nominal_obstimes <- map(modeling_data, ~mutate(., time_from_event = ifelse(cens_type ==3, time_from_event + 7, time_from_event)) %>%
+#                                                  group_by(Race) %>%
+#                                                  summarize(nominal_obstime = sum(time_from_event, na.rm=T)) %>%
+#                           ungroup() %>%
+#                           mutate(Race = as.character(Race)))
 
-final_tbl <- out_obstimes_fn(sim_results)
+yll <- out_yll_fn(sim_results)
+final_tbl <- out_obstimes_fn(sim_results, modeling_data2)
+
 ## Repeat for stratified analyses
 
 sim_results_young <- sim_fn_yll(modeling_data2_young)
@@ -599,36 +636,43 @@ yll_old <- out_yll_fn(sim_results_old)
 final_tbl_young = out_obstimes_fn(sim_results_young, modeling_data2_young)
 final_tbl_old = out_obstimes_fn(sim_results_old, modeling_data2_old)
 
-openxlsx::write.xlsx(list('Young' = final_tbl_young, 
+openxlsx::write.xlsx(list('Overall' = final_tbl,
+                          'Young' = final_tbl_young,
                           'Old' = final_tbl_old,
+                          'Overall-YLL' = yll,
                           'Young-YLL' = yll_young,
-                          'Old-YLL' = yll_old), 
-                     file='ObsTimeByAgegroup.xlsx',
+                          'Old-YLL' = yll_old),
+                     file='ObsTime.xlsx',
                      headerStyle = openxlsx::createStyle(textDecoration = 'BOLD'))
+
+
+# Summaries of Weibull models -----------------------------------------------------------------
+
+# TODO: summarize Weibull models
 # Some plotting options -----------------------------------------------------------------------
 
-map(modeling_data2, ~bind_rows(.x) %>% 
-      coxph(Surv(time_from_event, cens_type %in% c(1,3))~Race, data = .) %>% 
-      broom::tidy() %>% 
-      select(term, estimate, conf.low, conf.high) %>% 
-      mutate_at(vars(-term), exp)) %>% 
-  bind_rows(.id = 'Condition') %>% 
-  mutate(term = str_remove(term, 'Race')) %>% 
-  filter(term=='Asian') %>% 
+map(modeling_data2, ~bind_rows(.x) %>%
+      coxph(Surv(time_from_event, cens_type %in% c(1,3))~Race, data = .) %>%
+      broom::tidy() %>%
+      select(term, estimate, conf.low, conf.high) %>%
+      mutate_at(vars(-term), exp)) %>%
+  bind_rows(.id = 'Condition') %>%
+  mutate(term = str_remove(term, 'Race')) %>%
+  filter(term=='Asian') %>%
   mutate(type = 'Nominal') -> blah1
 
-blah = modify_depth(cox_models, 2, ~select(., term, estimate) %>% 
-                      filter(term=='RaceAsian') %>% 
-                      mutate(estimate = exp(estimate))) %>% 
-  map(~bind_rows(.) %>% 
-        summarize(estimate = median(estimate), 
-                  conf.low = quantile(estimate, 0.025), 
-                  conf.high=quantile(estimate, 0.975))) %>% 
-  bind_rows(.id = 'Condition') %>% 
-  mutate(type = 'Simulated', term = 'Black') %>% 
+blah = modify_depth(cox_models, 2, ~select(., term, estimate) %>%
+                      filter(term=='RaceAsian') %>%
+                      mutate(estimate = exp(estimate))) %>%
+  map(~bind_rows(.) %>%
+        summarize(estimate = median(estimate),
+                  conf.low = quantile(estimate, 0.025),
+                  conf.high=quantile(estimate, 0.975))) %>%
+  bind_rows(.id = 'Condition') %>%
+  mutate(type = 'Simulated', term = 'Black') %>%
   select(Condition, term, everything())
 
-bind_rows(list(blah, blah1)) %>% 
+bind_rows(list(blah, blah1)) %>%
   ggplot(aes(x = Condition, y = estimate, ymin = conf.low, ymax = conf.high,
              group = type, color = type))+
   geom_pointrange(size = .5)+
@@ -637,28 +681,15 @@ bind_rows(list(blah, blah1)) %>%
   coord_flip()+
   ggtitle('Asian')
 
-map(modeling_data2, ~bind_rows(.x) %>% 
-      coxph(Surv(time_from_event, cens_type %in% c(1,3))~Race, data = .) %>% 
-      broom::tidy() %>% 
-      select(term, estimate, conf.low, conf.high) %>% 
-      mutate_at(vars(-term), exp)) %>% 
-  bind_rows(.id = 'Condition') %>% 
-  mutate(term = str_remove(term, 'Race')) %>% 
-  rename(Race = term) %>% 
+map(modeling_data2, ~bind_rows(.x) %>%
+      coxph(Surv(time_from_event, cens_type %in% c(1,3))~Race, data = .) %>%
+      broom::tidy() %>%
+      select(term, estimate, conf.low, conf.high) %>%
+      mutate_at(vars(-term), exp)) %>%
+  bind_rows(.id = 'Condition') %>%
+  mutate(term = str_remove(term, 'Race')) %>%
+  rename(Race = term) %>%
   openxlsx::write.xlsx('Original_HR.xlsx')
-
-bl <- modify_depth(cox_models, 2, ~select(., term, estimate) %>%
-mutate(estimate = exp(estimate))) %>%
-map(~bind_rows(.) )
-bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
-pdf('SimulationResults.pdf')
-for(n in names(bl)){
-  print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
-          facet_wrap(~term, scales = 'free', nrow = 2)+
-          labs(x = 'Hazard ratio against Whites', y = '') + 
-          ggtitle(n))
-}
-dev.off()
 
 
 # TODO: Do some residual analysis and validation of White Weibull model

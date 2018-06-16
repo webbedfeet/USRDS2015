@@ -1,6 +1,6 @@
 clean_cols <- function(x, ..., arrange = F){
   colv = quos(...)
-  x <- x %>% 
+  x <- x %>%
     mutate_at(vars(!!!colv),as.character) # make sure columns are characters
   if(arrange){
     x <- x %>% arrange(!!!colv) # Ensure right order of columns
