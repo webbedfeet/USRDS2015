@@ -396,6 +396,10 @@ for(n in names(modeling_data)){
 
 modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, REGION, toc:tow), by ='USRDS_ID') %>%
                         mutate_at(vars(toc:tow), funs(.*365.25)) %>%
+                        mutate(time_on_dialysis = as.numeric(time_on_dialysis),
+                               REGION = as.factor(REGION),
+                               agegrp_at_event = fct_collapse(agegrp_at_event,
+                                                              '<50' = c('<40','[40,50)'))) %>% 
                         split(.$Race)) # convert times to days
 
 
@@ -475,6 +479,7 @@ for(n in names(bl)){
 }
 dev.off()
 
+stopCluster(cl)
 
 # Simulation study stratified by group --------------------------------------------------------
 modeling_data2_young <- modify_depth(modeling_data2, 2, ~filter(., age_at_event < 70))
@@ -486,8 +491,13 @@ N_young <- modify_depth(modeling_data2_young, 1, ~map_df(., nrow)) %>%
 N_old <- modify_depth(modeling_data2_old, 1, ~map_df(., nrow)) %>%
   bind_rows(.id = 'Condition')
 
+cl <- makeCluster(no_cores)
+registerDoParallel(cl)
+
 cox_models_young <- sim_fn(modeling_data2_young)
 cox_models_old <- sim_fn(modeling_data2_old)
+
+stopCluster(cl)
 
 bl <- modify_depth(cox_models_old, 2, ~select(., term, estimate) %>%
                      mutate(estimate = exp(estimate))) %>%
@@ -576,7 +586,11 @@ sim_fn_yll <- function(dat_list, nsim = 1000){
   return(list('obstimes' = obstimes, 'yll' = yll))
 }
 
+cl <- makeCluster(no_cores)
+registerDoParallel(cl)
 sim_results <- sim_fn_yll(modeling_data2)
+stopCluster(cl)
+
 
 out_yll_fn <- function(simres){
   yll <- simres$yll
@@ -626,9 +640,12 @@ yll <- out_yll_fn(sim_results)
 final_tbl <- out_obstimes_fn(sim_results, modeling_data2)
 
 ## Repeat for stratified analyses
-
+cl <- makeCluster(no_cores)
+registerDoParallel(cl)
 sim_results_young <- sim_fn_yll(modeling_data2_young)
 sim_results_old <- sim_fn_yll(modeling_data2_old)
+stopCluster(cl)
+
 
 yll_young <- out_yll_fn(sim_results_young)
 yll_old <- out_yll_fn(sim_results_old)
@@ -647,7 +664,38 @@ openxlsx::write.xlsx(list('Overall' = final_tbl,
 
 
 # Summaries of Weibull models -----------------------------------------------------------------
+weib_models <- list()
+for (cnd in names(modeling_data2)){
+  D = modeling_data2[[cnd]]
+  weib_models[[cnd]] <- survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
+                                  agegrp_at_event + SEX  + time_on_dialysis +
+                                  REGION+
+                                  zscore + comorb_indx,
+                                data = D$White,
+                                dist = 'weibull')
+}
+weib_res <- map(weib_models, broom::tidy)
 
+# To convert AFT coefficients to hazard ratios, if a is the AFT coefficient,
+# then the HR is b = -a/scale(survreg). Note that 1/scale(survreg) = shape (rweibull), 
+# and many docs will refer to the shape parameter. 
+
+aft_to_hr <- function(x){
+  require(glue)
+  sc = tail(x,1)$estimate
+  x = x[1:(nrow(x)-1),] %>% 
+    filter(!str_detect(term,'Intercept'))
+  x <- x %>% select(term, estimate, starts_with('conf')) %>% 
+    gather(variable, value, -term) %>% 
+    mutate(value = exp(-value/sc)) %>% 
+    mutate(value = ifelse(value < 1e-3, format(value, digits=2, scientific=F),
+                          round(value, digits=2))) %>% 
+    spread(variable, value) %>% 
+    mutate(out = glue('{estimate} ({conf.high}, {conf.low})')) %>% 
+    select(term, out)
+  return(x)
+}
+# 
 # TODO: summarize Weibull models
 # Some plotting options -----------------------------------------------------------------------
 
