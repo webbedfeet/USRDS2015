@@ -695,6 +695,37 @@ aft_to_hr <- function(x){
     select(term, out)
   return(x)
 }
+
+weib_res2 <- map(weib_res, aft_to_hr)
+
+format_terms <- function(x, mod){
+  nms <- names(attr(mod$terms, 'dataClasses'))
+  baseline <- map(mod$xlevels, 1) %>% 
+    bind_rows() %>% 
+    gather(Variables, term) %>% 
+    cbind(out = '')
+  
+  x$Variables = ''
+  for(n in nms){
+    x$Variables[str_detect(x$term, n)] <- n
+    x$term = str_remove(x$term, n)
+  }
+  x <- x %>% select(Variables, term, out) %>% 
+    bind_rows(baseline) %>% 
+    arrange(Variables, term)
+  x2 <- split(x, x$Variables)
+  xlvl = mod$xlevels
+  for (n in names(xlvl)){
+    x2[[n]] <- x2[[n]][match(xlvl[[n]],x2[[n]][,'term']),]
+  }
+  x <- bind_rows(x2)
+  x <- x %>% 
+    rename(value = term, HR = out) %>% 
+    clean_cols(Variables)
+  return(x)
+}
+
+
 # 
 # TODO: summarize Weibull models
 # Some plotting options -----------------------------------------------------------------------
