@@ -238,7 +238,7 @@ hosp_postdx_age <- readRDS(file.path(dropdir, 'hosp_postdx_age.rds'))
 
 hosp_cox_data <-
   map(hosp_postdx_age, ~.x %>%
-        left_join(select(Dat,  SEX, zscore, USRDS_ID)) %>%
+        left_join(select(Dat,  SEX, zscore, USRDS_ID, REGION)) %>%
         mutate(time_from_event = as.numeric(surv_date-CLM_FROM)) %>%
         mutate(time_on_dialysis = se_to_event_time) %>%
         rename('Race' = "RACE2") %>%
@@ -268,8 +268,8 @@ for(n in names(modeling_data)){
 ## Data munging to add simulated withdrawal times
 
 Dat <- readRDS('data/rda/Analytic.rds')
-modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, REGION, toc:tow), by ='USRDS_ID') %>%
-                        mutate_at(vars(toc:tow), funs(.*365.25)) %>%
+modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, toc:tow), by ='USRDS_ID') %>%
+                        mutate_at(vars(toc:tow), funs(.*365.25)) %>% # Change to days
                         mutate(time_on_dialysis = as.numeric(time_on_dialysis),
                                REGION = as.factor(REGION),
                                agegrp_at_event = fct_collapse(agegrp_at_event,
@@ -352,9 +352,9 @@ for(i in 1:6) print(plt_list[[i]])
 dev.off()
 
 #'  Cox regressions adjusting for age at event, gender, race, z-score, region, comorbidities and time on dialysis at time of event
-hosp_coxph <- map(hosp_cox_data,
-                  ~ coxph(Surv(time_from_event, cens_type==3)~Race + agegrp_at_event + SEX + zscore +
-                            time_on_dialysis, data = .) %>%
+hosp_coxph <- map(modeling_data,
+                  ~ coxph(Surv(time_from_event+0.1, cens_type==3)~Race + agegrp_at_event + SEX + zscore +
+                            REGION + comorb_indx + time_on_dialysis, data = .) %>%
                     broom::tidy() %>%
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
@@ -371,7 +371,9 @@ bind_rows(hosp_coxph, .id = 'index_event') %>%
   ggsave('ForestPlot.pdf')
 
 bind_rows(hosp_coxph, .id = 'Index event') %>%
-  openxlsx::write.xlsx('CoxPH.xlsx')
+  rename(Race = term, HR = etimate, `P-value` = p.value, `95% LCB` = conf.low, `95% UCB` = conf.high) %>% 
+  clean_cols(`Index event`) %>% 
+  openxlsx::write.xlsx('CoxPH.xlsx', headerStyle = openxlsx::createStyle(textDecoration = 'BOLD'))
 
 
 

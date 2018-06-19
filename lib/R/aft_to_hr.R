@@ -1,4 +1,8 @@
 #' Converting AFT coefficients to HR in the Weibull model
+#' 
+#' To convert AFT coefficients to hazard ratios, if a is the AFT coefficient,
+#' then the HR is b = -a/scale(survreg). Note that 1/scale(survreg) = shape (rweibull), 
+#' and many docs will refer to the shape parameter. 
 #'
 #' @param Results of a weibull regression formatted by broom::tidy
 #'
