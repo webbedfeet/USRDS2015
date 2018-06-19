@@ -360,20 +360,34 @@ hosp_coxph <- map(modeling_data,
                     select(term, estimate, p.value:conf.high) %>%
                     mutate(term = str_remove(term, 'Race')) %>%
                     mutate_at(vars(estimate, conf.low:conf.high), exp))
-bind_rows(hosp_coxph, .id = 'index_event') %>%
+bind_rows(hosp_coxph, .id = 'Index event') %>%
+  mutate(`Index event` = case_when(`Index event` == 'stroke_primary' ~ 'Primary stroke',
+                                   `Index event` == 'stroke_compl' ~ 'Stroke with complications',
+                                   `Index event` == 'LuCa' ~ 'Lung cancer',
+                                   `Index event` == 'MetsCa' ~ 'Metastatic cancer',
+                                   `Index event` == 'dement' ~ 'Dementia',
+                                   `Index event` == 'thrive' ~ 'Failure to thrive')) %>% 
   ggplot(aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high))+
   geom_pointrange() +
   geom_hline(yintercept = 1, linetype =3)+
-  facet_wrap(~index_event, nrow=2) +
+  facet_wrap(~`Index event`, nrow=2) +
   theme(axis.text.x = element_text(angle = 45, hjust=1)) +
   scale_y_continuous('HR for discontinuation, compared to Whites', breaks = seq(0.4,1.4, by = 0.2))+
   labs(x = '') +
   ggsave('ForestPlot.pdf')
 
 bind_rows(hosp_coxph, .id = 'Index event') %>%
-  rename(Race = term, HR = etimate, `P-value` = p.value, `95% LCB` = conf.low, `95% UCB` = conf.high) %>% 
+  rename(Race = term, HR = estimate, `P-value` = p.value, `95% LCB` = conf.low, `95% UCB` = conf.high) %>% 
+  mutate(`Index event` = case_when(`Index event` == 'stroke_primary' ~ 'Primary stroke',
+                                   `Index event` == 'stroke_compl' ~ 'Stroke with complications',
+                                   `Index event` == 'LuCa' ~ 'Lung cancer',
+                                   `Index event` == 'MetsCa' ~ 'Metastatic cancer',
+                                   `Index event` == 'dement' ~ 'Dementia',
+                                   `Index event` == 'thrive' ~ 'Failure to thrive')) %>% 
   clean_cols(`Index event`) %>% 
-  openxlsx::write.xlsx('CoxPH.xlsx', headerStyle = openxlsx::createStyle(textDecoration = 'BOLD'))
+  openxlsx::write.xlsx('CoxPH.xlsx', colWidths = 'auto', 
+                       headerStyle = openxlsx::createStyle(textDecoration = 'BOLD'),
+                       overwrite = TRUE)
 
 
 
