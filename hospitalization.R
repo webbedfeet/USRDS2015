@@ -676,6 +676,16 @@ for (cnd in names(modeling_data2)){
 }
 weib_res <- map(weib_models, broom::tidy)
 
+
+## Cox-Snell graphs
+
+pdf('CoxSnell.pdf')
+for(n in names(weib_models)){
+  cs <- cox_snell(weib_models[[n]], modeling_data2[[n]]$White)
+  title(main = n)
+}
+dev.off()
+
 # To convert AFT coefficients to hazard ratios, if a is the AFT coefficient,
 # then the HR is b = -a/scale(survreg). Note that 1/scale(survreg) = shape (rweibull), 
 # and many docs will refer to the shape parameter. 
