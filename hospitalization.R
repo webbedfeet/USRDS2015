@@ -205,6 +205,7 @@ hosp_post_dx <-
 saveRDS(hosp_post_dx, 'data/rda/final_hosp_data.rds', compress = T)
 saveRDS(hosp_post_dx, file.path(dropdir, 'final_hosp_data.rds'), compress = T)
 
+
 # Propensity of withdrawal based on timing of Comorb ------------------------------------------
 
 #' what's the chance of discontinuation, by race
@@ -225,19 +226,81 @@ hosp_postdx_age <- map(
                                    '80+' = intersect(levels(agegrp_at_event),
                                                      c('[80,90)','[90,100)','[90,100]','[100,110]')))))
 
+
+saveRDS(hosp_postdx_age, file.path(dropdir,'hosp_postdx_age.rds'), compress = T)
+
+# Cox regressions: Data munging -----------------------------------------------------------------------------
+# Data munging and generation: Matching comorbidity score with time of index condition -------------------------------------
+
+index_condn_comorbs <- readRDS(file.path(dropdir, 'index_condn_comorbs.rds'))
+hosp_post_dx <- readRDS(file.path(dropdir, 'final_hosp_data.rds'))
+hosp_postdx_age <- readRDS(file.path(dropdir, 'hosp_postdx_age.rds'))
+
+hosp_cox_data <-
+  map(hosp_postdx_age, ~.x %>%
+        left_join(select(Dat,  SEX, zscore, USRDS_ID)) %>%
+        mutate(time_from_event = as.numeric(surv_date-CLM_FROM)) %>%
+        mutate(time_on_dialysis = se_to_event_time) %>%
+        rename('Race' = "RACE2") %>%
+        filter(Race != 'Other') %>%
+        mutate(Race = droplevels(Race)))
+
+out <- list()
+for (n in names(hosp_post_dx)){
+  print(paste('Working on ', n))
+  d <- index_condn_comorbs[[n]] %>% select(USRDS_ID:CLM_THRU, comorb_indx)
+  hosp_post_dx[[n]] %>% mutate(CLM_FROM = as.character(CLM_FROM),
+                               CLM_THRU = as.character(CLM_THRU)) %>%
+    left_join(d) %>%
+    group_by(USRDS_ID) %>%
+    filter(comorb_indx == max(comorb_indx)) %>%
+    ungroup() %>%
+    distinct() -> out[[n]]
+}
+assertthat::are_equal(map_int(hosp_post_dx, nrow), map_int(out, nrow))
+hosp_post_dx <- out
+
+modeling_data <- hosp_cox_data
+for(n in names(modeling_data)){
+  modeling_data[[n]] <- modeling_data[[n]] %>% left_join(out[[n]] %>% select(USRDS_ID, comorb_indx))
+}
+
+## Data munging to add simulated withdrawal times
+
+Dat <- readRDS('data/rda/Analytic.rds')
+modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, REGION, toc:tow), by ='USRDS_ID') %>%
+                        mutate_at(vars(toc:tow), funs(.*365.25)) %>%
+                        mutate(time_on_dialysis = as.numeric(time_on_dialysis),
+                               REGION = as.factor(REGION),
+                               agegrp_at_event = fct_collapse(agegrp_at_event,
+                                                              '<50' = c('<40','[40,50)'))) %>% 
+                        split(.$Race)) # convert times to days
+
+save(modeling_data, modeling_data2, file = file.path(dropdir,'modeling_data.rda'), compress = T)
+
+
+# TODO: Figure out which analysis makes the most sense
+
+################################################################################################
+# Analyses
+################################################################################################
+
+
+# What is the chance of discontinuation, by age and race --------------------------------------
+
 out1 <- map(hosp_postdx_age, ~.x %>%
-      group_by(agegrp_at_event, RACE2) %>%
-      summarize(prop_withdrew = round(mean(cens_type==3), 3), N = n()) %>%
-      ungroup()) %>%
+              group_by(agegrp_at_event, RACE2) %>%
+              summarize(prop_withdrew = round(mean(cens_type==3), 3), N = n()) %>%
+              ungroup()) %>%
   bind_rows(.id = 'index_event') %>%
   filter(!is.na(RACE2)) %>%
   unite(out, c('prop_withdrew','N'), sep=' / ') %>%
   spread(agegrp_at_event, out) %>%
   mutate(index_event = transform_indx(index_event)) %>%
- rename(`Index event`=index_event, Race=RACE2)
+  rename(`Index event`=index_event, Race=RACE2)
 
 out2 <- map(hosp_post_dx, ~.x %>% group_by(RACE2) %>% summarise(prop_withdrew = mean(cens_type==3),
-                                                        N = n())) %>%
+                                                                N = n())) %>%
   bind_rows(.id='index_condition') %>%
   filter(!is.na(RACE2)) %>%
   mutate(index_condition = transform_indx(index_condition)) %>%
@@ -247,10 +310,9 @@ out2 <- map(hosp_post_dx, ~.x %>% group_by(RACE2) %>% summarise(prop_withdrew = 
 out <- left_join(out1, out2, by=c("Index event" = 'index_condition','Race'='RACE2'))
 openxlsx::write.xlsx(out, file='Withdrawal_age_race.xlsx')
 
-
-
 # Median time after index condition to discontinuation ----------------------------------------
 
+hosp_postdx_age <- readRDS(file.path(dropdir, 'hosp_postdx_age.rds'))
 map(hosp_postdx_age, ~.x %>%
       mutate(time_to_wd = as.numeric(surv_date - CLM_FROM)) %>% # time between dialysis and withdrawal
       group_by(agegrp_at_event, RACE2) %>%
@@ -263,32 +325,15 @@ map(hosp_postdx_age, ~.x %>%
   openxlsx::write.xlsx(file = 'Time_to_withdrawal.xlsx')
 
 
+# Survival analysis on discontinuation --------------------------------------------------------
 
-
-# Cox regressions -----------------------------------------------------------------------------
-
-## Cox regression from time of even to time of withdrawal, as a cause-specific hazard estimation
-## problem
-
-hosp_cox_data <-
-  map(hosp_postdx_age, ~.x %>%
-        left_join(select(Dat,  SEX, zscore, USRDS_ID)) %>%
-        mutate(time_from_event = as.numeric(surv_date-CLM_FROM)) %>%
-        mutate(time_on_dialysis = se_to_event_time) %>%
-        rename('Race' = "RACE2") %>%
-        filter(Race != 'Other') %>%
-        mutate(Race = droplevels(Race)))
-
-# names(hosp_cox_data) <- c('Primary stroke','Stroke with complications',
-#                           'Lung Cancer','Metastatic Cancer',
-#                           'Dementia','Failure to thrive')
-saveRDS(hosp_cox_data, file.path(dropdir, 'hosp_cox_data.rds'), compress = T)
+load(file.path(dropdir, 'modeling_data.rda'))
 
 ## Kaplan Meier curves
 
-fit_list = map(hosp_cox_data, ~survfit(Surv(time_from_event, cens_type==3)~ Race,
+fit_list = map(modeling_data, ~survfit(Surv(time_from_event, cens_type==3)~ Race,
                                        data = .))
-cph1_list <-  map(hosp_cox_data, ~ coxph(Surv(time_from_event, cens_type==3)~ Race,
+cph1_list <-  map(modeling_data, ~ coxph(Surv(time_from_event, cens_type==3)~ Race,
                                          data = .))
 logrank_list <- map(cph1_list, ~format.pval(anova(.)[2,4], eps=1e-6))
 plt_list <- vector('list',6)
@@ -306,7 +351,7 @@ pdf('KaplanMeierPlots.pdf')
 for(i in 1:6) print(plt_list[[i]])
 dev.off()
 
-#'  Cox regressions adjusting for age at event, gender, race, z-score and time on dialysis at time of event
+#'  Cox regressions adjusting for age at event, gender, race, z-score, region, comorbidities and time on dialysis at time of event
 hosp_coxph <- map(hosp_cox_data,
                   ~ coxph(Surv(time_from_event, cens_type==3)~Race + agegrp_at_event + SEX + zscore +
                             time_on_dialysis, data = .) %>%
@@ -317,18 +362,17 @@ hosp_coxph <- map(hosp_cox_data,
                     mutate_at(vars(estimate, conf.low:conf.high), exp))
 bind_rows(hosp_coxph, .id = 'index_event') %>%
   ggplot(aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high))+
-    geom_pointrange() +
-    geom_hline(yintercept = 1, linetype =3)+
-    facet_wrap(~index_event, nrow=2) +
-    theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-    scale_y_continuous('HR for discontinuation, compared to Whites', breaks = seq(0.4,1.4, by = 0.2))+
-    labs(x = '') +
-    ggsave('ForestPlot.pdf')
+  geom_pointrange() +
+  geom_hline(yintercept = 1, linetype =3)+
+  facet_wrap(~index_event, nrow=2) +
+  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+  scale_y_continuous('HR for discontinuation, compared to Whites', breaks = seq(0.4,1.4, by = 0.2))+
+  labs(x = '') +
+  ggsave('ForestPlot.pdf')
 
 bind_rows(hosp_coxph, .id = 'Index event') %>%
   openxlsx::write.xlsx('CoxPH.xlsx')
 
-# TODO: Figure out which analysis makes the most sense
 
 
 # Evaluating how long from discontinuation to death -------------------------------------------
@@ -365,49 +409,9 @@ Dat %>% filter(RACE2 != 'Other', cens_type == 3) %>%
 ## This is done in evaluate_comorbidities.R
 
 
-# Data munging and generation: Matching comorbidity score with time of index condition -------------------------------------
-
-index_condn_comorbs <- readRDS(file.path(dropdir, 'index_condn_comorbs.rds'))
-hosp_post_dx <- readRDS(file.path(dropdir, 'final_hosp_data.rds'))
-
-out <- list()
-for (n in names(hosp_post_dx)){
-  print(paste('Working on ', n))
-  d <- index_condn_comorbs[[n]] %>% select(USRDS_ID:CLM_THRU, comorb_indx)
-  hosp_post_dx[[n]] %>% mutate(CLM_FROM = as.character(CLM_FROM),
-                               CLM_THRU = as.character(CLM_THRU)) %>%
-    left_join(d) %>%
-    group_by(USRDS_ID) %>%
-    filter(comorb_indx == max(comorb_indx)) %>%
-    ungroup() %>%
-    distinct() -> out[[n]]
-}
-assertthat::are_equal(map_int(hosp_post_dx, nrow), map_int(out, nrow))
-hosp_post_dx <- out
-
-# TODO: Model time to withdrawal as a function of age, sex, race, time to
-# index condition from FIRST_SE and comorbidity score, using parametric survival models
-#
-
-Dat <- readRDS('data/rda/Analytic.rds')
-hosp_cox_data <- readRDS(file.path(dropdir, 'hosp_cox_data.rds'))
-modeling_data <- hosp_cox_data
-for(n in names(modeling_data)){
-  modeling_data[[n]] <- modeling_data[[n]] %>% left_join(out[[n]] %>% select(USRDS_ID, comorb_indx))
-}
-
-## Data munging to add simulated withdrawal times
-
-modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, REGION, toc:tow), by ='USRDS_ID') %>%
-                        mutate_at(vars(toc:tow), funs(.*365.25)) %>%
-                        mutate(time_on_dialysis = as.numeric(time_on_dialysis),
-                               REGION = as.factor(REGION),
-                               agegrp_at_event = fct_collapse(agegrp_at_event,
-                                                              '<50' = c('<40','[40,50)'))) %>% 
-                        split(.$Race)) # convert times to days
-
-
 # Simulation study ----------------------------------------------------------------------------
+load(file.path(dropdir, 'modeling_data.rda'))
+
 cl <- makeCluster(no_cores)
 registerDoParallel(cl)
 
@@ -445,6 +449,7 @@ dev.off()
 stopCluster(cl)
 
 # Simulation study stratified by group --------------------------------------------------------
+load(file.path(dropdir, 'modeling_data.rda'))
 modeling_data2_young <- modify_depth(modeling_data2, 2, ~filter(., age_at_event < 70))
 modeling_data2_old <- modify_depth(modeling_data2, 2, ~filter(., age_at_event >= 70))
 
@@ -466,6 +471,7 @@ bl <- modify_depth(cox_models_old, 2, ~select(., term, estimate) %>%
                      mutate(estimate = exp(estimate))) %>%
   map(~bind_rows(.) )
 bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
+
 pdf('SimulationResults_old.pdf')
 for(n in names(bl)){
   print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
@@ -479,6 +485,7 @@ bl <- modify_depth(cox_models_young, 2, ~select(., term, estimate) %>%
                      mutate(estimate = exp(estimate))) %>%
   map(~bind_rows(.) )
 bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
+
 pdf('SimulationResults_young.pdf')
 for(n in names(bl)){
   print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
@@ -491,7 +498,7 @@ dev.off()
 
 # YLL and observed time computations ----------------------------------------------------------------------------
 
-
+load(file.path(dropdir, 'modeling_data.rda'))
 cl <- makeCluster(no_cores)
 registerDoParallel(cl)
 sim_results <- sim_fn_yll(modeling_data2)
@@ -533,6 +540,7 @@ openxlsx::write.xlsx(list('Overall' = final_tbl,
 
 
 # Summaries of Weibull models -----------------------------------------------------------------
+load(file.path(dropdir, 'modeling_data.rda'))
 weib_models <- list()
 for (cnd in names(modeling_data2)){
   D = modeling_data2[[cnd]]
@@ -555,11 +563,7 @@ for(n in names(weib_models)){
 }
 dev.off()
 
-# To convert AFT coefficients to hazard ratios, if a is the AFT coefficient,
-# then the HR is b = -a/scale(survreg). Note that 1/scale(survreg) = shape (rweibull), 
-# and many docs will refer to the shape parameter. 
 
-%>% 
 weib_res2 <- map(weib_res, aft_to_hr)
 
 format_terms <- function(x, mod){
@@ -570,7 +574,7 @@ format_terms <- function(x, mod){
     cbind(out = '')
   
   x$Variables = ''
-  for(n in nms){
+  for (n in nms){
     x$Variables[str_detect(x$term, n)] <- n
     x$term = str_remove(x$term, n)
   }
@@ -579,7 +583,7 @@ format_terms <- function(x, mod){
     arrange(Variables, term)
   x2 <- split(x, x$Variables)
   xlvl = mod$xlevels
-  for (n in names(xlvl)){
+  for (n in names(xlvl)) {
     x2[[n]] <- x2[[n]][match(xlvl[[n]],x2[[n]][,'term']),]
   }
   x <- bind_rows(x2)
@@ -589,50 +593,14 @@ format_terms <- function(x, mod){
   return(x)
 }
 
-
-# 
-# TODO: summarize Weibull models
-# Some plotting options -----------------------------------------------------------------------
-
-map(modeling_data2, ~bind_rows(.x) %>%
-      coxph(Surv(time_from_event, cens_type %in% c(1,3))~Race, data = .) %>%
-      broom::tidy() %>%
-      select(term, estimate, conf.low, conf.high) %>%
-      mutate_at(vars(-term), exp)) %>%
-  bind_rows(.id = 'Condition') %>%
-  mutate(term = str_remove(term, 'Race')) %>%
-  filter(term=='Asian') %>%
-  mutate(type = 'Nominal') -> blah1
-
-blah = modify_depth(cox_models, 2, ~select(., term, estimate) %>%
-                      filter(term=='RaceAsian') %>%
-                      mutate(estimate = exp(estimate))) %>%
-  map(~bind_rows(.) %>%
-        summarize(estimate = median(estimate),
-                  conf.low = quantile(estimate, 0.025),
-                  conf.high=quantile(estimate, 0.975))) %>%
-  bind_rows(.id = 'Condition') %>%
-  mutate(type = 'Simulated', term = 'Black') %>%
-  select(Condition, term, everything())
-
-bind_rows(list(blah, blah1)) %>%
-  ggplot(aes(x = Condition, y = estimate, ymin = conf.low, ymax = conf.high,
-             group = type, color = type))+
-  geom_pointrange(size = .5)+
-  geom_hline(yintercept = 1, linetype = 2)+
-  labs(y = 'Hazard ratio vs Whites')+
-  coord_flip()+
-  ggtitle('Asian')
-
-map(modeling_data2, ~bind_rows(.x) %>%
-      coxph(Surv(time_from_event, cens_type %in% c(1,3))~Race, data = .) %>%
-      broom::tidy() %>%
-      select(term, estimate, conf.low, conf.high) %>%
-      mutate_at(vars(-term), exp)) %>%
-  bind_rows(.id = 'Condition') %>%
-  mutate(term = str_remove(term, 'Race')) %>%
-  rename(Race = term) %>%
-  openxlsx::write.xlsx('Original_HR.xlsx')
-
-
-# TODO: Do some residual analysis and validation of White Weibull model
+out <- map2(weib_res2, weib_models, format_terms)
+out <- map(out, ~ mutate(., Variables = case_when(Variables == 'agegrp_at_event' ~ 'Age group',
+                                                    Variables == 'comorb_indx' ~ 'Comorbidity index',
+                                                    Variables == 'REGION' ~ 'Region',
+                                                    Variables == 'SEX' ~ 'Sex',
+                                                    Variables == 'time_on_dialysis' ~ "Time on dialysis (days)",
+                                                    Variables == 'zscore' ~ 'SES Score',
+                                                    TRUE ~ '')) %>% 
+             rename(Group = value))
+openxlsx::write.xlsx(out, file = 'WhiteModels.xlsx', 
+                     headerStyle = openxlsx::createStyle(textDecoration = 'BOLD') )
