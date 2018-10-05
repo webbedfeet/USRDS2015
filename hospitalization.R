@@ -287,7 +287,7 @@ save(modeling_data, modeling_data2, file = file.path(dropdir,'modeling_data.rda'
 
 
 # What is the chance of discontinuation, by age and race --------------------------------------
-
+hosp_postdx_age <- readRDS(file.path(dropdir,'hosp_postdx_age.rds'))
 out1 <- map(hosp_postdx_age, ~.x %>%
               group_by(agegrp_at_event, RACE2) %>%
               summarize(prop_withdrew = round(mean(cens_type==3), 3), N = n()) %>%
@@ -299,6 +299,7 @@ out1 <- map(hosp_postdx_age, ~.x %>%
   mutate(index_event = transform_indx(index_event)) %>%
   rename(`Index event`=index_event, Race=RACE2)
 
+hosp_post_dx <- readRDS(file.path(dropdir, 'final_hosp_data.rds'))
 out2 <- map(hosp_post_dx, ~.x %>% group_by(RACE2) %>% summarise(prop_withdrew = mean(cens_type==3),
                                                                 N = n())) %>%
   bind_rows(.id='index_condition') %>%
