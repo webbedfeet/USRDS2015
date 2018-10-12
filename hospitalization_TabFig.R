@@ -292,4 +292,44 @@ openxlsx::write.xlsx(list('Table 1'= tab1, 'Table 2' = tbl2, 'Table 3' = tbl3),
 
 # Figure 2 ------------------------------------------------------------------------------------
 
+cox_models <- readRDS(file.path(dropdir, 'cox_models.rds'))
+cox_models <- cox_models[names(events)]
+cox_models %>% modify_depth(2, ~select(., term, estimate) %>% 
+                              mutate(term = str_remove(term, 'Race'),
+                                     term = str_replace(term, 'Native American','AI/AN'),
+                                     estimate = exp(estimate))) %>% 
+  map(bind_rows) %>% 
+  bind_rows(.id = 'Event') %>% 
+  mutate(Event = events[Event]) %>% 
+  mutate(Race = as.factor(term),
+         Event = as.factor(Event)) %>% 
+  mutate(Race = fct_relevel(Race, race_order[-1]),
+         Event = fct_relevel(Event, c('Stroke','Lung cancer','Dementia', 'Failure to thrive'))) %>% 
+  select(-term) -> bl
 
+ggplot(bl, aes(x = estimate)) + geom_density() + 
+  facet_grid(Event ~ Race, scales = 'free', switch = 'y') +
+  geom_vline(xintercept = 1, linetype = 2) + 
+  labs(x = 'Adjusted HR, compared to Whites', y = '') + 
+  theme(strip.text = element_text(size = 14, face = 'bold'),
+        strip.text.y = element_text(angle = 180),
+        strip.background = element_rect(fill = 'white'),
+        strip.placement = 'outside',
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        panel.spacing.x = unit(2, 'lines'))
+ggsave('Figure2.pdf', width = 12, height = 7)
+
+ggplot(bl, aes(x = estimate)) + geom_density() + 
+  facet_grid(Event ~ Race, scales = 'free', switch = 'y', space = 'free_x') +
+  geom_vline(xintercept = 1, linetype = 2) + 
+  labs(x = 'Adjusted HR, compared to Whites', y = '') + 
+  theme(strip.text = element_text(size = 14, face = 'bold'),
+        strip.text.y = element_text(angle = 180),
+        strip.background = element_rect(fill = 'white'),
+        strip.placement = 'outside',
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x = element_text(size = 8),
+        panel.spacing.x = unit(2, 'lines'))
+ggsave('Figure2a.pdf', width = 12, height = 7)
