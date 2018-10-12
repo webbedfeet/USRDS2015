@@ -449,21 +449,6 @@ for(n in names(bl)){
 }
 dev.off()
 
-bl <- modify_depth(cox_models, 2, ~select(., term, estimate) %>%
-                     mutate(estimate = exp(estimate))) %>%
-  map(~bind_rows(.) )
-bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
-
-pdf('SimulationResults.pdf')
-for(n in names(bl)){
-  print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
-          facet_wrap(~term, scales = 'free', nrow = 2)+
-          labs(x = 'Hazard ratio against Whites', y = '') +
-          ggtitle(n))
-}
-dev.off()
-
-stopCluster(cl)
 
 # Simulation study stratified by group --------------------------------------------------------
 load(file.path(dropdir, 'modeling_data.rda'))
