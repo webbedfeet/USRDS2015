@@ -289,6 +289,56 @@ openxlsx::write.xlsx(list('Table 1'= tab1, 'Table 2' = tbl2, 'Table 3' = tbl3),
 
 # Figure 1 ------------------------------------------------------------------------------------
 
+library(survival)
+library(survminer)
+load(file.path(dropdir, 'modeling_data.rda'))
+
+d <- bind_rows(modeling_data, .id = 'Event') %>% 
+  mutate(Event = events[Event]) %>% 
+  filter(!is.na(Event)) %>% 
+  mutate(Race  = str_replace(Race, 'Native American','AI/AN')) %>% 
+  mutate_at(vars(Event, Race), as.factor) %>% 
+  mutate(Event = fct_relevel(Event, c('Stroke','Lung cancer','Dementia','Failure to thrive')),
+         Race = fct_relevel(Race, c('White','Black','Hispanic','Asian','AI/AN')))
+
+bl <- d %>% nest(-Event) %>% 
+  mutate(mods = map(data, ~survfit(Surv(time_from_event, cens_type == 3) ~ Race, data = .))) %>% 
+  mutate(plots = map2(data, mods, ~ggsurvplot(.y, data = .x, fun = function(y) 1-y, 
+                                              conf.int = F, pval = F, censor = F)$plot +
+                        labs(x = '', y = '')+ylim(0,1)+
+                        theme(axis.text.x = element_blank(), axis.ticks.x= element_blank(), legend.position = 'none',
+                              axis.text.y = element_text(size = 9))))
+legend_b <- get_legend(bl$plots[[4]]+theme(legend.position='bottom', legend.text = element_text(size = 8)))
+bl$plots[[4]] <- bl$plots[[4]]  + theme(axis.ticks.x = element_line(), 
+                                                                     axis.text.x = element_text(size = 10))
+
+plt_disc <- plot_grid(plotlist = bl$plots, ncol = 1, align = 'v', rel_heights = c(1,1,1,1.2),
+          labels = levels(d$Event), label_size = 10, label_x = 0.2, vjust = 1, hjust = 0) + 
+  draw_label('Probability', x = 0.02, y = 0.5, angle = 90, hjust = 0.2)
+title = ggdraw() + draw_label('Discontinuation', fontface='bold')
+bottom = ggdraw() + draw_label('Days from event', size = 12)
+
+plt_disc_complete <- plot_grid(title, plt_disc, ncol = 1, rel_heights = c(0.1, 1))
+
+bl2 <- d %>% 
+  nest(-Event) %>% 
+  mutate(mods = map(data, ~survfit(Surv(time_from_event, cens_type==1) ~ Race, data = .))) %>% 
+  mutate(plots = map2(data, mods, ~ggsurvplot(.y, data = .x, conf.int = F, pval = F, censor = F)$plot+
+                        labs(x = '', y = '') + ylim(0,1)+
+                        theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+                              legend.position = 'none',
+                              axis.text.y = element_text(size = 9))))
+bl2$plots[[4]] <- bl2$plots[[4]] + 
+  theme(axis.ticks.x = element_line(), axis.text.x = element_text(size = 10))
+plt_surv <- plot_grid(plotlist = bl2$plots, ncol = 1, align='v', rel_heights = c(1,1,1,1.2),
+                      labels = levels(d$Event), label_size = 10, label_x = 0.25, vjust = 1, hjust = 0)
+title2 = ggdraw() + draw_label('Mortality', fontface = 'bold')
+plt_surv_complete = plot_grid(title2, plt_surv, ncol = 1, rel_heights = c(0.1, 1))
+
+plt <- plot_grid(plt_disc_complete, plt_surv_complete, nrow = 1, align = 'h') %>% 
+  plot_grid(bottom, ncol = 1, rel_heights = c(1,0.05)) %>% 
+  plot_grid(legend_b, ncol = 1, rel_heights = c(1, 0.1))
+ggsave('Figure1.pdf', width = 8, height = 7)
 
 # Figure 2 ------------------------------------------------------------------------------------
 
