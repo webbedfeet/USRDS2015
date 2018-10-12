@@ -383,3 +383,9 @@ ggplot(bl, aes(x = estimate)) + geom_density() +
         axis.text.x = element_text(size = 8),
         panel.spacing.x = unit(2, 'lines'))
 ggsave('Figure2a.pdf', width = 12, height = 7)
+
+
+# Supplemental table 1 ------------------------------------------------------------------------
+
+# TODO: Supplemental table 1
+
