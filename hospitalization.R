@@ -497,6 +497,8 @@ for(n in names(bl)){
 }
 dev.off()
 
+save(cox_models_young, cox_models_old, file = file.path(dropdir, 'cox_models_sim_strat.rda'), 
+     compress = T)
 
 # YLL and observed time computations ----------------------------------------------------------------------------
 
