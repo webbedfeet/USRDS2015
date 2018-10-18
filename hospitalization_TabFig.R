@@ -1,4 +1,3 @@
-
 ##%######################################################%##
 #                                                          #
 ####    Tables and figures for hospitalization study    ####
@@ -13,10 +12,9 @@ ProjTemplate::reload()
 dropdir <- file.path(ProjTemplate::find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
 load(file.path(dropdir, 'modeling_data.rda'))
 
+## Munge modeling data once here for all the tables
 
-# Table 1 -------------------------------------------------------------------------------------
-
-getTable1 <- function(d){
+munge_data <- function(d){
   out <- d %>%
     mutate(age_cat = case_when(
       INC_AGE <=49 ~ '18-49',
@@ -26,14 +24,23 @@ getTable1 <- function(d){
       INC_AGE >= 80 ~ '80+'
     ),
     REGION = factor(REGION, levels = c('Northeast','South','Midwest','West')),
-    SEX = factor(ifelse(SEX=='1','Male','Female'),levels = c('Male','Female')),
+    SEX = factor(ifelse(SEX == '1','Male','Female'),levels = c('Male','Female')),
     time_on_dialysis = as.numeric(time_on_dialysis)/30.42) %>% # convert into months
     mutate(Race = fct_relevel(Race,
-                              c("White", "Black",'Hispanic','Asian','Native American'))%>%
-                           fct_recode(c("AI/AN" = 'Native American'))) %>%
-    select(Race, Age = age_cat, Sex = SEX, Region = REGION, SES = zscore,
+                              c("White", "Black",'Hispanic','Asian','Native American')) %>%
+             fct_recode(c("AI/AN" = 'Native American'))) %>%
+    select(time_from_event, cens_type, age_at_event, Race, Age = age_cat, Sex = SEX, Region = REGION, SES = zscore,
            `Comorbidity index` = comorb_indx,
-           `Time on dialysis` = time_on_dialysis) %>%
+           `Time on dialysis` = time_on_dialysis)
+  
+}
+
+munged_modeling <- map(modeling_data, munge_data)
+# Table 1 -------------------------------------------------------------------------------------
+
+getTable1 <- function(d){
+  out <- d %>%
+    select(-time_from_event, -cens_type, -age_at_event) %>% 
     tableone::CreateTableOne(data = ., strata = 'Race',
                              test = F,
                              vars = setdiff(names(.), c('Race')))
@@ -44,7 +51,7 @@ getTable1 <- function(d){
 }
 
 
-tab1 <- map(modeling_data[c('stroke_primary','LuCa','dement','thrive')], getTable1)
+tab1 <- map(munged_modeling[c('stroke_primary','LuCa','dement','thrive')], getTable1)
 names(tab1) <- c('Stroke', 'Lung cancer', 'Dementia', "Failure to thrive")
 tab1 <- tab1 %>% bind_rows(.id = 'Event') %>%
   clean_cols(Event) %>%
@@ -56,8 +63,6 @@ tab1 <- tab1 %>% bind_rows(.id = 'Event') %>%
 
 # Table 2 -------------------------------------------------------------------------------------
 
-load(file.path(dropdir, 'modeling_data.rda'))
-race_order <- c("White",'Black','Hispanic','Asian','AI/AN')
 events <- c('stroke_primary' = 'Stroke',
             'LuCa' = "Lung cancer",
             'dement' = "Dementia",
@@ -66,9 +71,9 @@ events <- c('stroke_primary' = 'Stroke',
 ## Discontinuation
 
 ### Crude
-fit_list = map(modeling_data, ~survfit(Surv(time_from_event, cens_type==3)~ Race,
+fit_list = map(munged_modeling,  ~survfit(Surv(time_from_event, cens_type==3)~ Race,
                                        data = .))
-cph1_list <-  map(modeling_data, ~ coxph(Surv(time_from_event, cens_type==3)~ Race,
+cph1_list <-  map(munged_modeling, ~ coxph(Surv(time_from_event, cens_type==3)~ Race,
                                          data = .))
 # for(i in 1:6){
 #   plt_list[[i]] <- survMisc::autoplot(fit_list[[i]], type='single', censSize = 0,
@@ -146,6 +151,8 @@ Perc <- map(modeling_data, ~group_by(., Race) %>%
               mutate(Race = as.character(Race)) %>%
               mutate(Race = ifelse(Race == "Native American", "AI/AN", Race)))[c('stroke_primary','LuCa','dement','thrive')]
 
+race_order <- c('White','Black','Hispanic','Asian','AI/AN')
+
 tbl2 <- map2(Perc, res_discontinutation, left_join, by=c("Race" = "term")) %>%
   map2(res_survival, left_join, by = c("Race" = "term")) %>%
   map(~.x[match(race_order, .x$Race),]) %>%
@@ -155,11 +162,10 @@ tbl2 <- map2(Perc, res_discontinutation, left_join, by=c("Race" = "term")) %>%
   add_blank_rows(.before = which(.$Event != '')[-1]) %>%
   mutate_all(~replace_na(., ''))
 
-# Table 3 -------------------------------------------------------------------------------------
+%>% # Table 3 -------------------------------------------------------------------------------------
 
-load(file.path(dropdir, 'modeling_data.rda'))
-modeling_data_young <- map(modeling_data, ~filter(., age_at_event < 70))
-modeling_data_old <- map(modeling_data, ~filter(., age_at_event >= 70))
+munged_modeling_young <- map(munged_modeling, ~filter(., age_at_event < 70))
+munged_modeling_old <- map(munged_modeling, ~filter(., age_at_event >= 70))
 
 ## Discontinuation
 ### Adjusted
