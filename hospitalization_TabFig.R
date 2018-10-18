@@ -1,3 +1,4 @@
+
 ##%######################################################%##
 #                                                          #
 ####    Tables and figures for hospitalization study    ####
@@ -16,7 +17,7 @@ load(file.path(dropdir, 'modeling_data.rda'))
 # Table 1 -------------------------------------------------------------------------------------
 
 getTable1 <- function(d){
-  out <- d %>% 
+  out <- d %>%
     mutate(age_cat = case_when(
       INC_AGE <=49 ~ '18-49',
       INC_AGE %in% seq(50,59) ~ '50-59',
@@ -26,17 +27,17 @@ getTable1 <- function(d){
     ),
     REGION = factor(REGION, levels = c('Northeast','South','Midwest','West')),
     SEX = factor(ifelse(SEX=='1','Male','Female'),levels = c('Male','Female')),
-    time_on_dialysis = as.numeric(time_on_dialysis)/30.42) %>% # convert into months 
-    mutate(Race = fct_relevel(Race, 
-                              c("White", "Black",'Hispanic','Asian','Native American'))%>% 
-                           fct_recode(c("AI/AN" = 'Native American'))) %>% 
-    select(Race, Age = age_cat, Sex = SEX, Region = REGION, SES = zscore, 
-           `Comorbidity index` = comorb_indx, 
-           `Time on dialysis` = time_on_dialysis) %>% 
-    tableone::CreateTableOne(data = ., strata = 'Race', 
-                             test = F, 
+    time_on_dialysis = as.numeric(time_on_dialysis)/30.42) %>% # convert into months
+    mutate(Race = fct_relevel(Race,
+                              c("White", "Black",'Hispanic','Asian','Native American'))%>%
+                           fct_recode(c("AI/AN" = 'Native American'))) %>%
+    select(Race, Age = age_cat, Sex = SEX, Region = REGION, SES = zscore,
+           `Comorbidity index` = comorb_indx,
+           `Time on dialysis` = time_on_dialysis) %>%
+    tableone::CreateTableOne(data = ., strata = 'Race',
+                             test = F,
                              vars = setdiff(names(.), c('Race')))
-  out <- print(out, 
+  out <- print(out,
                nonnormal = c("Comorbidity index", 'SES', "Time on dialysis"))
   out <- as.data.frame(out) %>% rownames_to_column('Variable')
   return(out)
@@ -45,9 +46,9 @@ getTable1 <- function(d){
 
 tab1 <- map(modeling_data[c('stroke_primary','LuCa','dement','thrive')], getTable1)
 names(tab1) <- c('Stroke', 'Lung cancer', 'Dementia', "Failure to thrive")
-tab1 <- tab1 %>% bind_rows(.id = 'Event') %>% 
-  clean_cols(Event) %>% 
-  add_blank_rows(.before = which(.$Event != '')[-1]) %>% 
+tab1 <- tab1 %>% bind_rows(.id = 'Event') %>%
+  clean_cols(Event) %>%
+  add_blank_rows(.before = which(.$Event != '')[-1]) %>%
   mutate_all(~replace_na(., ''))
 
 # openxlsx::write.xlsx(tab1, file = 'TableOne.xlsx', colWidths = 'auto')
@@ -79,14 +80,14 @@ cph1_list <-  map(modeling_data, ~ coxph(Surv(time_from_event, cens_type==3)~ Ra
 #     theme(legend.position = 'bottom', legend.justification = c(0.5, 0.5))
 # }
 
-out_crude <- map(cph1_list, ~tidy(.) %>% select(term, estimate, starts_with('conf')) %>% 
-                   mutate_if(is.numeric, exp) %>% 
-                   mutate(term = str_remove(term, 'Race')) %>% 
+out_crude <- map(cph1_list, ~tidy(.) %>% select(term, estimate, starts_with('conf')) %>%
+                   mutate_if(is.numeric, exp) %>%
+                   mutate(term = str_remove(term, 'Race')) %>%
                    mutate(res = as.character(
-                     glue('{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})'))) %>% 
-                   select(term, res) %>% 
-                   mutate(term = ifelse(term == "Native American", 'AI/AN', term)) %>% 
-                   rbind(data.frame(term="White", res = "1.00 (ref)")) %>% 
+                     glue('{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})'))) %>%
+                   select(term, res) %>%
+                   mutate(term = ifelse(term == "Native American", 'AI/AN', term)) %>%
+                   rbind(data.frame(term="White", res = "1.00 (ref)")) %>%
                    rename(cHR_disc = res))
 
 ### Adjusted
@@ -97,11 +98,11 @@ hosp_coxph <- map(modeling_data,
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
                     mutate(term = str_remove(term, 'Race')) %>%
-                    mutate_at(vars(estimate, conf.low:conf.high), exp) %>% 
-                    mutate(term = ifelse(term == 'Native American', 'AI/AN', term)) %>% 
-                    mutate(res = as.character(glue("{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})"))) %>% 
-                    select(term, res) %>% 
-                    rbind(data.frame(term = "White", res = "1.00 (ref)")) %>% 
+                    mutate_at(vars(estimate, conf.low:conf.high), exp) %>%
+                    mutate(term = ifelse(term == 'Native American', 'AI/AN', term)) %>%
+                    mutate(res = as.character(glue("{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})"))) %>%
+                    select(term, res) %>%
+                    rbind(data.frame(term = "White", res = "1.00 (ref)")) %>%
                     rename(aHR_disc = res))
 
 res_discontinutation <- map2(out_crude, hosp_coxph, left_join)
@@ -111,15 +112,15 @@ res_discontinutation <-  res_discontinutation[c('stroke_primary','LuCa','dement'
 
 cph1_list_surv <-  map(modeling_data, ~ coxph(Surv(time_from_event, cens_type %in% c(1,3))~ Race,
                                          data = .))
-out_crude_surv <- map(cph1_list_surv, 
-                      ~tidy(.) %>% select(term, estimate, starts_with('conf')) %>% 
-                        mutate_if(is.numeric, exp) %>% 
-                        mutate(term = str_remove(term, 'Race')) %>% 
+out_crude_surv <- map(cph1_list_surv,
+                      ~tidy(.) %>% select(term, estimate, starts_with('conf')) %>%
+                        mutate_if(is.numeric, exp) %>%
+                        mutate(term = str_remove(term, 'Race')) %>%
                         mutate(res = as.character(
-                          glue('{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})'))) %>% 
-                        select(term, res) %>% 
-                        mutate(term = ifelse(term == "Native American", 'AI/AN', term)) %>% 
-                        rbind(data.frame(term="White", res = "1.00 (ref)")) %>% 
+                          glue('{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})'))) %>%
+                        select(term, res) %>%
+                        mutate(term = ifelse(term == "Native American", 'AI/AN', term)) %>%
+                        rbind(data.frame(term="White", res = "1.00 (ref)")) %>%
                         rename(cHR_mort = res))
 
 ### Adjusted
@@ -130,28 +131,28 @@ hosp_coxph_surv <- map(modeling_data,
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
                     mutate(term = str_remove(term, 'Race')) %>%
-                    mutate_at(vars(estimate, conf.low:conf.high), exp) %>% 
-                    mutate(term = ifelse(term == 'Native American', 'AI/AN', term)) %>% 
-                    mutate(res = as.character(glue("{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})"))) %>% 
-                    select(term, res) %>% 
-                    rbind(data.frame(term = "White", res = "1.00 (ref)")) %>% 
+                    mutate_at(vars(estimate, conf.low:conf.high), exp) %>%
+                    mutate(term = ifelse(term == 'Native American', 'AI/AN', term)) %>%
+                    mutate(res = as.character(glue("{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})"))) %>%
+                    select(term, res) %>%
+                    rbind(data.frame(term = "White", res = "1.00 (ref)")) %>%
                     rename(aHR_surv = res))
 
 res_survival <- map2(out_crude_surv, hosp_coxph_surv, left_join)[c('stroke_primary','LuCa','dement','thrive')]
 
-Perc <- map(modeling_data, ~group_by(., Race) %>% 
-              summarize(perc = round(100*mean(cens_type==3, na.rm=T), 2)) %>% 
+Perc <- map(modeling_data, ~group_by(., Race) %>%
+              summarize(perc = round(100*mean(cens_type==3, na.rm=T), 2)) %>%
               ungroup() %>%
-              mutate(Race = as.character(Race)) %>% 
+              mutate(Race = as.character(Race)) %>%
               mutate(Race = ifelse(Race == "Native American", "AI/AN", Race)))[c('stroke_primary','LuCa','dement','thrive')]
 
-tbl2 <- map2(Perc, res_discontinutation, left_join, by=c("Race" = "term")) %>% 
-  map2(res_survival, left_join, by = c("Race" = "term")) %>% 
-  map(~.x[match(race_order, .x$Race),]) %>% 
-  bind_rows(.id = "Event") %>% 
-  mutate(Event = events[Event]) %>% 
-  clean_cols('Event') %>% 
-  add_blank_rows(.before = which(.$Event != '')[-1]) %>% 
+tbl2 <- map2(Perc, res_discontinutation, left_join, by=c("Race" = "term")) %>%
+  map2(res_survival, left_join, by = c("Race" = "term")) %>%
+  map(~.x[match(race_order, .x$Race),]) %>%
+  bind_rows(.id = "Event") %>%
+  mutate(Event = events[Event]) %>%
+  clean_cols('Event') %>%
+  add_blank_rows(.before = which(.$Event != '')[-1]) %>%
   mutate_all(~replace_na(., ''))
 
 # Table 3 -------------------------------------------------------------------------------------
@@ -170,11 +171,11 @@ hosp_coxph_young <- map(modeling_data_young,
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
                     mutate(term = str_remove(term, 'Race')) %>%
-                    mutate_at(vars(estimate, conf.low:conf.high), exp) %>% 
-                    mutate(term = ifelse(term == 'Native American', 'AI/AN', term)) %>% 
-                    mutate(res = as.character(glue("{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})"))) %>% 
-                    select(term, res) %>% 
-                    rbind(data.frame(term = "White", res = "1.00")) %>% 
+                    mutate_at(vars(estimate, conf.low:conf.high), exp) %>%
+                    mutate(term = ifelse(term == 'Native American', 'AI/AN', term)) %>%
+                    mutate(res = as.character(glue("{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})"))) %>%
+                    select(term, res) %>%
+                    rbind(data.frame(term = "White", res = "1.00")) %>%
                     rename(aHR_disc = res))
 
 hosp_coxph_old <- map(modeling_data_old,
@@ -184,11 +185,11 @@ hosp_coxph_old <- map(modeling_data_old,
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
                     mutate(term = str_remove(term, 'Race')) %>%
-                    mutate_at(vars(estimate, conf.low:conf.high), exp) %>% 
-                    mutate(term = ifelse(term == 'Native American', 'AI/AN', term)) %>% 
-                    mutate(res = as.character(glue("{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})"))) %>% 
-                    select(term, res) %>% 
-                    rbind(data.frame(term = "White", res = "1.00")) %>% 
+                    mutate_at(vars(estimate, conf.low:conf.high), exp) %>%
+                    mutate(term = ifelse(term == 'Native American', 'AI/AN', term)) %>%
+                    mutate(res = as.character(glue("{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})"))) %>%
+                    select(term, res) %>%
+                    rbind(data.frame(term = "White", res = "1.00")) %>%
                     rename(aHR_disc = res))
 
 ## Survival
@@ -200,11 +201,11 @@ hosp_surv_coxph_young <- map(modeling_data_young,
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
                     mutate(term = str_remove(term, 'Race')) %>%
-                    mutate_at(vars(estimate, conf.low:conf.high), exp) %>% 
-                    mutate(term = ifelse(term == 'Native American', 'AI/AN', term)) %>% 
-                    mutate(res = as.character(glue("{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})"))) %>% 
-                    select(term, res) %>% 
-                    rbind(data.frame(term = "White", res = "1.00")) %>% 
+                    mutate_at(vars(estimate, conf.low:conf.high), exp) %>%
+                    mutate(term = ifelse(term == 'Native American', 'AI/AN', term)) %>%
+                    mutate(res = as.character(glue("{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})"))) %>%
+                    select(term, res) %>%
+                    rbind(data.frame(term = "White", res = "1.00")) %>%
                     rename(aHR_surv = res))
 
 hosp_surv_coxph_old <- map(modeling_data_old,
@@ -214,79 +215,79 @@ hosp_surv_coxph_old <- map(modeling_data_old,
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
                     mutate(term = str_remove(term, 'Race')) %>%
-                    mutate_at(vars(estimate, conf.low:conf.high), exp) %>% 
-                    mutate(term = ifelse(term == 'Native American', 'AI/AN', term)) %>% 
-                    mutate(res = as.character(glue("{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})"))) %>% 
-                    select(term, res) %>% 
-                    rbind(data.frame(term = "White", res = "1.00")) %>% 
+                    mutate_at(vars(estimate, conf.low:conf.high), exp) %>%
+                    mutate(term = ifelse(term == 'Native American', 'AI/AN', term)) %>%
+                    mutate(res = as.character(glue("{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})"))) %>%
+                    select(term, res) %>%
+                    rbind(data.frame(term = "White", res = "1.00")) %>%
                     rename(aHR_surv = res))
 
 # Simulation study
 
 load(file.path(dropdir, 'cox_models_sim_strat.rda'))
-bl_young <- modify_depth(cox_models_young, 2, ~select(., term, estimate) %>% 
-                           mutate(estimate = exp(estimate))) %>% 
+bl_young <- modify_depth(cox_models_young, 2, ~select(., term, estimate) %>%
+                           mutate(estimate = exp(estimate))) %>%
   map(~bind_rows(.) %>%
-        mutate(term = str_remove(term, 'Race')) %>% 
-        mutate(term = str_replace(term, 'Native American','AI/AN')) %>% 
-        group_by(term) %>% 
-        summarize(Min = min(estimate), Max = max(estimate)) %>% 
-        mutate(sim_range = as.character(glue('({round(Min,2)},{round(Max,2)})'))) %>% 
-        select(term, sim_range) %>% 
-        rename(Race = term) %>% 
+        mutate(term = str_remove(term, 'Race')) %>%
+        mutate(term = str_replace(term, 'Native American','AI/AN')) %>%
+        group_by(term) %>%
+        summarize(Min = min(estimate), Max = max(estimate)) %>%
+        mutate(sim_range = as.character(glue('({round(Min,2)},{round(Max,2)})'))) %>%
+        select(term, sim_range) %>%
+        rename(Race = term) %>%
         rbind(data.frame(Race = 'White', sim_range = '1.00')))
-bl_old <- modify_depth(cox_models_old, 2, ~select(., term, estimate) %>% 
-                           mutate(estimate = exp(estimate))) %>% 
+bl_old <- modify_depth(cox_models_old, 2, ~select(., term, estimate) %>%
+                           mutate(estimate = exp(estimate))) %>%
   map(~bind_rows(.) %>%
-        mutate(term = str_remove(term, 'Race')) %>% 
-        mutate(term = str_replace(term, 'Native American','AI/AN')) %>% 
-        group_by(term) %>% 
-        summarize(Min = min(estimate), Max = max(estimate)) %>% 
-        mutate(sim_range = as.character(glue('({round(Min,2)},{round(Max,2)})'))) %>% 
-        select(term, sim_range) %>% 
-        rename(Race = term) %>% 
+        mutate(term = str_remove(term, 'Race')) %>%
+        mutate(term = str_replace(term, 'Native American','AI/AN')) %>%
+        group_by(term) %>%
+        summarize(Min = min(estimate), Max = max(estimate)) %>%
+        mutate(sim_range = as.character(glue('({round(Min,2)},{round(Max,2)})'))) %>%
+        select(term, sim_range) %>%
+        rename(Race = term) %>%
         rbind(data.frame(Race = 'White', sim_range = '1.00')))
 
-N_young <- map(modeling_data_young, ~count(., Race) %>% 
-                 mutate(Race = as.character(Race)) %>% 
+N_young <- map(modeling_data_young, ~count(., Race) %>%
+                 mutate(Race = as.character(Race)) %>%
                  mutate(Race = str_replace(Race, 'Native American', 'AI/AN')))
-Perc_young = map(modeling_data_young, ~group_by(., Race) %>% 
-             summarize(perc = round(100*mean(cens_type==3, na.rm=T),2)) %>% 
-               mutate(Race = as.character(Race)) %>% 
+Perc_young = map(modeling_data_young, ~group_by(., Race) %>%
+             summarize(perc = round(100*mean(cens_type==3, na.rm=T),2)) %>%
+               mutate(Race = as.character(Race)) %>%
                mutate(Race = str_replace(Race, 'Native American', 'AI/AN')))
-N_old <- map(modeling_data_old, ~count(., Race) %>% 
-                 mutate(Race = as.character(Race)) %>% 
+N_old <- map(modeling_data_old, ~count(., Race) %>%
+                 mutate(Race = as.character(Race)) %>%
                  mutate(Race = str_replace(Race, 'Native American', 'AI/AN')))
-Perc_old = map(modeling_data_old, ~group_by(., Race) %>% 
-             summarize(perc = round(100*mean(cens_type==3, na.rm=T),2)) %>% 
-               mutate(Race = as.character(Race)) %>% 
+Perc_old = map(modeling_data_old, ~group_by(., Race) %>%
+             summarize(perc = round(100*mean(cens_type==3, na.rm=T),2)) %>%
+               mutate(Race = as.character(Race)) %>%
                mutate(Race = str_replace(Race, 'Native American', 'AI/AN')))
 
-res_young <- N_young %>% 
-  map2(Perc_young, left_join) %>% 
+res_young <- N_young %>%
+  map2(Perc_young, left_join) %>%
   map2(hosp_coxph_young, left_join, by=c("Race" = "term")) %>%
-  map2(hosp_surv_coxph_young, left_join, by=c("Race" = "term")) %>% 
-  map2(bl_young, left_join) %>% 
-  map(~.x[match(race_order,.x$Race),]) %>% 
-  bind_rows(.id = 'Event') %>% 
-  mutate(Event = events[Event]) %>% 
+  map2(hosp_surv_coxph_young, left_join, by=c("Race" = "term")) %>%
+  map2(bl_young, left_join) %>%
+  map(~.x[match(race_order,.x$Race),]) %>%
+  bind_rows(.id = 'Event') %>%
+  mutate(Event = events[Event]) %>%
   filter(!is.na(Event))
 
-res_old <- N_old %>% 
-  map2(Perc_old, left_join) %>% 
+res_old <- N_old %>%
+  map2(Perc_old, left_join) %>%
   map2(hosp_coxph_old, left_join, by=c("Race" = "term")) %>%
-  map2(hosp_surv_coxph_old, left_join, by=c("Race" = "term")) %>% 
-  map2(bl_old, left_join)%>% 
-  map(~.x[match(race_order,.x$Race),]) %>% 
-  bind_rows(.id = 'Event') %>% 
-  mutate(Event = events[Event]) %>% 
+  map2(hosp_surv_coxph_old, left_join, by=c("Race" = "term")) %>%
+  map2(bl_old, left_join)%>%
+  map(~.x[match(race_order,.x$Race),]) %>%
+  bind_rows(.id = 'Event') %>%
+  mutate(Event = events[Event]) %>%
   filter(!is.na(Event))
 
-tbl3 <- res_young %>% left_join(res_old, by = c("Event", 'Race')) %>% 
+tbl3 <- res_young %>% left_join(res_old, by = c("Event", 'Race')) %>%
   clean_cols(Event)
 
 
-openxlsx::write.xlsx(list('Table 1'= tab1, 'Table 2' = tbl2, 'Table 3' = tbl3), 
+openxlsx::write.xlsx(list('Table 1'= tab1, 'Table 2' = tbl2, 'Table 3' = tbl3),
                      file = 'Tables.xlsx',
                      colWidths = 'auto',
                      creator = "Abhijit Dasgupta")
@@ -297,50 +298,50 @@ library(survival)
 library(survminer)
 load(file.path(dropdir, 'modeling_data.rda'))
 
-d <- bind_rows(modeling_data, .id = 'Event') %>% 
-  mutate(Event = events[Event]) %>% 
-  filter(!is.na(Event)) %>% 
-  mutate(Race  = str_replace(Race, 'Native American','AI/AN')) %>% 
-  mutate_at(vars(Event, Race), as.factor) %>% 
+d <- bind_rows(modeling_data, .id = 'Event') %>%
+  mutate(Event = events[Event]) %>%
+  filter(!is.na(Event)) %>%
+  mutate(Race  = str_replace(Race, 'Native American','AI/AN')) %>%
+  mutate_at(vars(Event, Race), as.factor) %>%
   mutate(Event = fct_relevel(Event, c('Stroke','Lung cancer','Dementia','Failure to thrive')),
          Race = fct_relevel(Race, c('White','Black','Hispanic','Asian','AI/AN')))
 
-bl <- d %>% nest(-Event) %>% 
-  mutate(mods = map(data, ~survfit(Surv(time_from_event, cens_type == 3) ~ Race, data = .))) %>% 
-  mutate(plots = map2(data, mods, ~ggsurvplot(.y, data = .x, fun = function(y) 1-y, 
+bl <- d %>% nest(-Event) %>%
+  mutate(mods = map(data, ~survfit(Surv(time_from_event, cens_type == 3) ~ Race, data = .))) %>%
+  mutate(plots = map2(data, mods, ~ggsurvplot(.y, data = .x, fun = function(y) 1-y,
                                               conf.int = F, pval = F, censor = F)$plot +
                         labs(x = '', y = '')+ylim(0,1)+xlim(0,1000) +
                         theme(axis.text.x = element_blank(), axis.ticks.x= element_blank(), legend.position = 'none',
                               axis.text.y = element_text(size = 9))))
 legend_b <- get_legend(bl$plots[[4]]+theme(legend.position='bottom', legend.text = element_text(size = 8)))
-bl$plots[[4]] <- bl$plots[[4]]  + theme(axis.ticks.x = element_line(), 
+bl$plots[[4]] <- bl$plots[[4]]  + theme(axis.ticks.x = element_line(),
                                                                      axis.text.x = element_text(size = 10))
 
 plt_disc <- plot_grid(plotlist = bl$plots, ncol = 1, align = 'v', rel_heights = c(1,1,1,1.2),
-          labels = levels(d$Event), label_size = 10, label_x = 0.2, vjust = 1, hjust = 0) + 
+          labels = levels(d$Event), label_size = 10, label_x = 0.2, vjust = 1, hjust = 0) +
   draw_label('Probability', x = 0.02, y = 0.5, angle = 90, hjust = 0.2)
 title = ggdraw() + draw_label('Discontinuation', fontface='bold')
 bottom = ggdraw() + draw_label('Days from event', size = 12)
 
 plt_disc_complete <- plot_grid(title, plt_disc, ncol = 1, rel_heights = c(0.1, 1))
 
-bl2 <- d %>% 
-  nest(-Event) %>% 
-  mutate(mods = map(data, ~survfit(Surv(time_from_event, cens_type %in% c(1,3)) ~ Race, data = .))) %>% 
+bl2 <- d %>%
+  nest(-Event) %>%
+  mutate(mods = map(data, ~survfit(Surv(time_from_event, cens_type %in% c(1,3)) ~ Race, data = .))) %>%
   mutate(plots = map2(data, mods, ~ggsurvplot(.y, data = .x, conf.int = F, pval = F, censor = F)$plot+
                         labs(x = '', y = '') + ylim(0,1)+
                         theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
                               legend.position = 'none',
                               axis.text.y = element_text(size = 9))))
-bl2$plots[[4]] <- bl2$plots[[4]] + 
+bl2$plots[[4]] <- bl2$plots[[4]] +
   theme(axis.ticks.x = element_line(), axis.text.x = element_text(size = 10))
 plt_surv <- plot_grid(plotlist = bl2$plots, ncol = 1, align='v', rel_heights = c(1,1,1,1.2),
                       labels = levels(d$Event), label_size = 10, label_x = 0.25, vjust = 1, hjust = 0)
 title2 = ggdraw() + draw_label('Mortality', fontface = 'bold')
 plt_surv_complete = plot_grid(title2, plt_surv, ncol = 1, rel_heights = c(0.1, 1))
 
-plt <- plot_grid(plt_disc_complete, plt_surv_complete, nrow = 1, align = 'h') %>% 
-  plot_grid(bottom, ncol = 1, rel_heights = c(1,0.05)) %>% 
+plt <- plot_grid(plt_disc_complete, plt_surv_complete, nrow = 1, align = 'h') %>%
+  plot_grid(bottom, ncol = 1, rel_heights = c(1,0.05)) %>%
   plot_grid(legend_b, ncol = 1, rel_heights = c(1, 0.1))
 ggsave('Figure1.pdf', width = 8, height = 7)
 
@@ -348,23 +349,23 @@ ggsave('Figure1.pdf', width = 8, height = 7)
 
 cox_models <- readRDS(file.path(dropdir, 'cox_models.rds'))
 cox_models <- cox_models[names(events)]
-cox_models %>% modify_depth(2, ~select(., term, estimate) %>% 
+cox_models %>% modify_depth(2, ~select(., term, estimate) %>%
                               mutate(term = str_remove(term, 'Race'),
                                      term = str_replace(term, 'Native American','AI/AN'),
-                                     estimate = exp(estimate))) %>% 
-  map(bind_rows) %>% 
-  bind_rows(.id = 'Event') %>% 
-  mutate(Event = events[Event]) %>% 
+                                     estimate = exp(estimate))) %>%
+  map(bind_rows) %>%
+  bind_rows(.id = 'Event') %>%
+  mutate(Event = events[Event]) %>%
   mutate(Race = as.factor(term),
-         Event = as.factor(Event)) %>% 
+         Event = as.factor(Event)) %>%
   mutate(Race = fct_relevel(Race, race_order[-1]),
-         Event = fct_relevel(Event, c('Stroke','Lung cancer','Dementia', 'Failure to thrive'))) %>% 
+         Event = fct_relevel(Event, c('Stroke','Lung cancer','Dementia', 'Failure to thrive'))) %>%
   select(-term) -> bl
 
-ggplot(bl, aes(x = estimate)) + geom_density() + 
+ggplot(bl, aes(x = estimate)) + geom_density() +
   facet_grid(Event ~ Race, scales = 'free', switch = 'y') +
-  geom_vline(xintercept = 1, linetype = 2) + 
-  labs(x = 'Adjusted HR, compared to Whites', y = '') + 
+  geom_vline(xintercept = 1, linetype = 2) +
+  labs(x = 'Adjusted HR, compared to Whites', y = '') +
   theme(strip.text = element_text(size = 14, face = 'bold'),
         strip.text.y = element_text(angle = 180),
         strip.background = element_rect(fill = 'white'),
@@ -374,10 +375,10 @@ ggplot(bl, aes(x = estimate)) + geom_density() +
         panel.spacing.x = unit(2, 'lines'))
 ggsave('Figure2.pdf', width = 12, height = 7)
 
-ggplot(bl, aes(x = estimate)) + geom_density() + 
+ggplot(bl, aes(x = estimate)) + geom_density() +
   facet_grid(Event ~ Race, scales = 'free', switch = 'y', space = 'free_x') +
-  geom_vline(xintercept = 1, linetype = 2) + 
-  labs(x = 'Adjusted HR, compared to Whites', y = '') + 
+  geom_vline(xintercept = 1, linetype = 2) +
+  labs(x = 'Adjusted HR, compared to Whites', y = '') +
   theme(strip.text = element_text(size = 14, face = 'bold'),
         strip.text.y = element_text(angle = 180),
         strip.background = element_rect(fill = 'white'),
@@ -397,23 +398,23 @@ events <- c('stroke_primary' = 'Stroke',
             'LuCa' = "Lung cancer",
             'dement' = "Dementia",
             'thrive' = 'Failure to thrive')
-lbls <- c('Race' = 'Race', 'agegrp_at_event' = 'Age',  'SEX'  = 'Gender', 
-          'zscore' = 'SES Score', 'REGION' = 'Region', 'comorb_indx' = 'Comorbidity', 
+lbls <- c('Race' = 'Race', 'agegrp_at_event' = 'Age',  'SEX'  = 'Gender',
+          'zscore' = 'SES Score', 'REGION' = 'Region', 'comorb_indx' = 'Comorbidity',
           'time_on_dialysis' = 'Time on Dialysis')
 
 normalize_data <- function(d){
   require(tidyverse)
-  d %>% select(time_from_event, cens_type, Race, agegrp_at_event, SEX, zscore, REGION, 
-               comorb_indx, time_on_dialysis) %>% 
-    mutate_if(is.character, as.factor) %>% 
-    mutate(time_on_diaylsis = as.numeric(time_on_dialysis)) %>% 
+  d %>% select(time_from_event, cens_type, Race, agegrp_at_event, SEX, zscore, REGION,
+               comorb_indx, time_on_dialysis) %>%
+    mutate_if(is.character, as.factor) %>%
+    mutate(time_on_diaylsis = as.numeric(time_on_dialysis)) %>%
     mutate(Race = fct_recode(Race, 'AI/AN' = 'Native American'),
            Race = fct_relevel(Race, race_order),
            SEX = fct_recode(SEX, Male = '1', Female = '2'),
            SEX = fct_relevel(SEX, 'Male'),
            REGION = fct_relevel(REGION, 'Northeast'),
            zscore = zscore/10,
-           time_on_dialysis = time_on_dialysis/31.42) %>% 
+           time_on_dialysis = time_on_dialysis/31.42) %>%
     as_tibble()
 }
 
@@ -435,4 +436,3 @@ if (!('Supplemental Table 1' %in% names(wb))) addWorksheet(wb, 'Supplemental Tab
 writeData(wb, 'Supplemental Table 1', results, headerStyle = boldHeader)
 setColWidths(wb, 'Supplemental Table 1', cols = 1:ncol(results), widths = 'auto')
 saveWorkbook(wb, 'Tables.xlsx', overwrite = T)
-
