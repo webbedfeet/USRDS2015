@@ -8,7 +8,7 @@
 # setup ---------------------------------------------------------------------------------------
 
 ProjTemplate::reload()
-dbdir = verifyPaths(); dir.exists(dbdir)
+# dbdir = verifyPaths(); dir.exists(dbdir)
 dropdir <- file.path(ProjTemplate::find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
 load(file.path(dropdir, 'modeling_data.rda'))
 
@@ -26,7 +26,7 @@ getTable1 <- function(d){
     ),
     REGION = factor(REGION, levels = c('Northeast','South','Midwest','West')),
     SEX = factor(ifelse(SEX=='1','Male','Female'),levels = c('Male','Female')),
-    time_on_dialysis = as.numeric(time_on_dialysis)) %>% 
+    time_on_dialysis = as.numeric(time_on_dialysis)/30.42) %>% # convert into months 
     mutate(Race = fct_relevel(Race, 
                               c("White", "Black",'Hispanic','Asian','Native American'))%>% 
                            fct_recode(c("AI/AN" = 'Native American'))) %>% 
@@ -42,11 +42,15 @@ getTable1 <- function(d){
   return(out)
 }
 
+
 tab1 <- map(modeling_data[c('stroke_primary','LuCa','dement','thrive')], getTable1)
 names(tab1) <- c('Stroke', 'Lung cancer', 'Dementia', "Failure to thrive")
 tab1 <- tab1 %>% bind_rows(.id = 'Event') %>% 
-  clean_cols(Event)
-openxlsx::write.xlsx(tab1, file = 'TableOne.xlsx', colWidths = 'auto')
+  clean_cols(Event) %>% 
+  add_blank_rows(.before = which(.$Event != '')[-1]) %>% 
+  mutate_all(~replace_na(., ''))
+
+# openxlsx::write.xlsx(tab1, file = 'TableOne.xlsx', colWidths = 'auto')
 
 
 # Table 2 -------------------------------------------------------------------------------------
@@ -65,16 +69,15 @@ fit_list = map(modeling_data, ~survfit(Surv(time_from_event, cens_type==3)~ Race
                                        data = .))
 cph1_list <-  map(modeling_data, ~ coxph(Surv(time_from_event, cens_type==3)~ Race,
                                          data = .))
-logrank_list <- map(cph1_list, ~format.pval(anova(.)[2,4], eps=1e-6))
-for(i in 1:6){
-  plt_list[[i]] <- survMisc::autoplot(fit_list[[i]], type='single', censSize = 0,
-                                      title = names(fit_list)[i],
-                                      xLab = 'Days from index event',
-                                      legTitle = '')$plot +
-    scale_y_continuous('Percent who discontinued dialysis', labels = scales::percent)+
-    annotate('text', x = 50, y = 0.1, label=paste0('p-value : ', logrank_list[[i]]),hjust=0) +
-    theme(legend.position = 'bottom', legend.justification = c(0.5, 0.5))
-}
+# for(i in 1:6){
+#   plt_list[[i]] <- survMisc::autoplot(fit_list[[i]], type='single', censSize = 0,
+#                                       title = names(fit_list)[i],
+#                                       xLab = 'Days from index event',
+#                                       legTitle = '')$plot +
+#     scale_y_continuous('Percent who discontinued dialysis', labels = scales::percent)+
+#     annotate('text', x = 50, y = 0.1, label=paste0('p-value : ', logrank_list[[i]]),hjust=0) +
+#     theme(legend.position = 'bottom', legend.justification = c(0.5, 0.5))
+# }
 
 out_crude <- map(cph1_list, ~tidy(.) %>% select(term, estimate, starts_with('conf')) %>% 
                    mutate_if(is.numeric, exp) %>% 
@@ -83,7 +86,7 @@ out_crude <- map(cph1_list, ~tidy(.) %>% select(term, estimate, starts_with('con
                      glue('{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})'))) %>% 
                    select(term, res) %>% 
                    mutate(term = ifelse(term == "Native American", 'AI/AN', term)) %>% 
-                   rbind(data.frame(term="White", res = "1.00")) %>% 
+                   rbind(data.frame(term="White", res = "1.00 (ref)")) %>% 
                    rename(cHR_disc = res))
 
 ### Adjusted
@@ -98,7 +101,7 @@ hosp_coxph <- map(modeling_data,
                     mutate(term = ifelse(term == 'Native American', 'AI/AN', term)) %>% 
                     mutate(res = as.character(glue("{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})"))) %>% 
                     select(term, res) %>% 
-                    rbind(data.frame(term = "White", res = "1.00")) %>% 
+                    rbind(data.frame(term = "White", res = "1.00 (ref)")) %>% 
                     rename(aHR_disc = res))
 
 res_discontinutation <- map2(out_crude, hosp_coxph, left_join)
@@ -106,9 +109,7 @@ res_discontinutation <-  res_discontinutation[c('stroke_primary','LuCa','dement'
 
 ## Survival
 
-fit_list_surv = map(modeling_data, ~survfit(Surv(time_from_event, cens_type==1)~ Race,
-                                       data = .))
-cph1_list_surv <-  map(modeling_data, ~ coxph(Surv(time_from_event, cens_type==1)~ Race,
+cph1_list_surv <-  map(modeling_data, ~ coxph(Surv(time_from_event, cens_type %in% c(1,3))~ Race,
                                          data = .))
 out_crude_surv <- map(cph1_list_surv, 
                       ~tidy(.) %>% select(term, estimate, starts_with('conf')) %>% 
@@ -118,12 +119,12 @@ out_crude_surv <- map(cph1_list_surv,
                           glue('{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})'))) %>% 
                         select(term, res) %>% 
                         mutate(term = ifelse(term == "Native American", 'AI/AN', term)) %>% 
-                        rbind(data.frame(term="White", res = "1.00")) %>% 
+                        rbind(data.frame(term="White", res = "1.00 (ref)")) %>% 
                         rename(cHR_mort = res))
 
 ### Adjusted
 hosp_coxph_surv <- map(modeling_data,
-                  ~ coxph(Surv(time_from_event+0.1, cens_type==1)~Race + agegrp_at_event + SEX + zscore +
+                  ~ coxph(Surv(time_from_event+0.1, cens_type %in% c(1,3))~Race + agegrp_at_event + SEX + zscore +
                             REGION + comorb_indx + time_on_dialysis, data = .) %>%
                     broom::tidy() %>%
                     filter(str_detect(term, 'Race')) %>%
@@ -133,7 +134,7 @@ hosp_coxph_surv <- map(modeling_data,
                     mutate(term = ifelse(term == 'Native American', 'AI/AN', term)) %>% 
                     mutate(res = as.character(glue("{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})"))) %>% 
                     select(term, res) %>% 
-                    rbind(data.frame(term = "White", res = "1.00")) %>% 
+                    rbind(data.frame(term = "White", res = "1.00 (ref)")) %>% 
                     rename(aHR_surv = res))
 
 res_survival <- map2(out_crude_surv, hosp_coxph_surv, left_join)[c('stroke_primary','LuCa','dement','thrive')]
@@ -149,7 +150,9 @@ tbl2 <- map2(Perc, res_discontinutation, left_join, by=c("Race" = "term")) %>%
   map(~.x[match(race_order, .x$Race),]) %>% 
   bind_rows(.id = "Event") %>% 
   mutate(Event = events[Event]) %>% 
-  clean_cols('Event')
+  clean_cols('Event') %>% 
+  add_blank_rows(.before = which(.$Event != '')[-1]) %>% 
+  mutate_all(~replace_na(., ''))
 
 # Table 3 -------------------------------------------------------------------------------------
 
@@ -191,7 +194,7 @@ hosp_coxph_old <- map(modeling_data_old,
 ## Survival
 ### Adjusted
 hosp_surv_coxph_young <- map(modeling_data_young,
-                  ~ coxph(Surv(time_from_event+0.1, cens_type==1)~Race + agegrp_at_event + SEX + zscore +
+                  ~ coxph(Surv(time_from_event, cens_type %in% c(1,3))~Race + agegrp_at_event + SEX + zscore +
                             REGION + comorb_indx + time_on_dialysis, data = .) %>%
                     broom::tidy() %>%
                     filter(str_detect(term, 'Race')) %>%
@@ -205,7 +208,7 @@ hosp_surv_coxph_young <- map(modeling_data_young,
                     rename(aHR_surv = res))
 
 hosp_surv_coxph_old <- map(modeling_data_old,
-                  ~ coxph(Surv(time_from_event+0.1, cens_type==1)~Race + agegrp_at_event + SEX + zscore +
+                  ~ coxph(Surv(time_from_event, cens_type %in% c(1,3))~Race + agegrp_at_event + SEX + zscore +
                             REGION + comorb_indx + time_on_dialysis, data = .) %>%
                     broom::tidy() %>%
                     filter(str_detect(term, 'Race')) %>%
@@ -285,7 +288,8 @@ tbl3 <- res_young %>% left_join(res_old, by = c("Event", 'Race')) %>%
 
 openxlsx::write.xlsx(list('Table 1'= tab1, 'Table 2' = tbl2, 'Table 3' = tbl3), 
                      file = 'Tables.xlsx',
-                     colWidths = 'auto')
+                     colWidths = 'auto',
+                     creator = "Abhijit Dasgupta")
 
 # Figure 1 ------------------------------------------------------------------------------------
 
@@ -305,7 +309,7 @@ bl <- d %>% nest(-Event) %>%
   mutate(mods = map(data, ~survfit(Surv(time_from_event, cens_type == 3) ~ Race, data = .))) %>% 
   mutate(plots = map2(data, mods, ~ggsurvplot(.y, data = .x, fun = function(y) 1-y, 
                                               conf.int = F, pval = F, censor = F)$plot +
-                        labs(x = '', y = '')+ylim(0,1)+
+                        labs(x = '', y = '')+ylim(0,1)+xlim(0,1000) +
                         theme(axis.text.x = element_blank(), axis.ticks.x= element_blank(), legend.position = 'none',
                               axis.text.y = element_text(size = 9))))
 legend_b <- get_legend(bl$plots[[4]]+theme(legend.position='bottom', legend.text = element_text(size = 8)))
@@ -322,7 +326,7 @@ plt_disc_complete <- plot_grid(title, plt_disc, ncol = 1, rel_heights = c(0.1, 1
 
 bl2 <- d %>% 
   nest(-Event) %>% 
-  mutate(mods = map(data, ~survfit(Surv(time_from_event, cens_type==1) ~ Race, data = .))) %>% 
+  mutate(mods = map(data, ~survfit(Surv(time_from_event, cens_type %in% c(1,3)) ~ Race, data = .))) %>% 
   mutate(plots = map2(data, mods, ~ggsurvplot(.y, data = .x, conf.int = F, pval = F, censor = F)$plot+
                         labs(x = '', y = '') + ylim(0,1)+
                         theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
@@ -383,3 +387,52 @@ ggplot(bl, aes(x = estimate)) + geom_density() +
         axis.text.x = element_text(size = 8),
         panel.spacing.x = unit(2, 'lines'))
 ggsave('Figure2a.pdf', width = 12, height = 7)
+
+
+# Supplementary Table 1 -----------------------------------------------------------------------
+
+load(file.path(dropdir, 'modeling_data.rda'))
+race_order <- c("White",'Black','Hispanic','Asian','AI/AN')
+events <- c('stroke_primary' = 'Stroke',
+            'LuCa' = "Lung cancer",
+            'dement' = "Dementia",
+            'thrive' = 'Failure to thrive')
+lbls <- c('Race' = 'Race', 'agegrp_at_event' = 'Age',  'SEX'  = 'Gender', 
+          'zscore' = 'SES Score', 'REGION' = 'Region', 'comorb_indx' = 'Comorbidity', 
+          'time_on_dialysis' = 'Time on Dialysis')
+
+normalize_data <- function(d){
+  require(tidyverse)
+  d %>% select(time_from_event, cens_type, Race, agegrp_at_event, SEX, zscore, REGION, 
+               comorb_indx, time_on_dialysis) %>% 
+    mutate_if(is.character, as.factor) %>% 
+    mutate(time_on_diaylsis = as.numeric(time_on_dialysis)) %>% 
+    mutate(Race = fct_recode(Race, 'AI/AN' = 'Native American'),
+           Race = fct_relevel(Race, race_order),
+           SEX = fct_recode(SEX, Male = '1', Female = '2'),
+           SEX = fct_relevel(SEX, 'Male'),
+           REGION = fct_relevel(REGION, 'Northeast'),
+           zscore = zscore/10,
+           time_on_dialysis = time_on_dialysis/31.42) %>% 
+    as_tibble()
+}
+
+bl <- map(modeling_data[c('stroke_primary','LuCa','dement','thrive')], normalize_data)
+hosp_coxph_surv <- map(bl,
+                       ~ coxph(Surv(time_from_event+0.1, cens_type %in% c(1,3))~Race + agegrp_at_event + SEX + zscore +
+                                 REGION + comorb_indx + time_on_dialysis, data = .) )
+
+res <-  map(hosp_coxph_surv, table_results.coxph, lbls = lbls,tidy = F)
+for (nm in names(res)) {
+  res[[nm]] <- res[[nm]] %>% set_names(c('Variable',events[nm]))
+}
+results <- Reduce(left_join, res)
+
+library(openxlsx)
+boldHeader <- createStyle(textDecoration = 'bold')
+wb <- loadWorkbook('Tables.xlsx')
+if (!('Supplemental Table 1' %in% names(wb))) addWorksheet(wb, 'Supplemental Table 1')
+writeData(wb, 'Supplemental Table 1', results, headerStyle = boldHeader)
+setColWidths(wb, 'Supplemental Table 1', cols = 1:ncol(results), widths = 'auto')
+saveWorkbook(wb, 'Tables.xlsx', overwrite = T)
+
