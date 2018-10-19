@@ -419,23 +419,9 @@ lbls <- c('Race' = 'Race', 'agegrp_at_event' = 'Age',  'Sex'  = 'Gender',
           'zscore' = 'SES Score', 'Region' = 'Region', 'comorb_indx' = 'Comorbidity',
           'time_on_dialysis' = 'Time on Dialysis')
 
-normalize_data <- function(d){
-  require(tidyverse)
-  d %>% select(time_from_event, cens_type, Race, agegrp_at_event, Sex, zscore, Region,
-               comorb_indx, time_on_dialysis) %>%
-    mutate_if(is.character, as.factor) %>%
-    mutate(time_on_diaylsis = as.numeric(time_on_dialysis)) %>%
-    mutate(Race = fct_recode(Race, 'AI/AN' = 'Native American'),
-           Race = fct_relevel(Race, race_order),
-           Sex = fct_recode(Sex, Male = '1', Female = '2'),
-           Sex = fct_relevel(Sex, 'Male'),
-           Region = fct_relevel(Region, 'Northeast'),
-           zscore = zscore/10,
-           time_on_dialysis = time_on_dialysis/31.42) %>%
-    as_tibble()
-}
 
-bl <- map(munged_modeling[c('stroke_primary','LuCa','dement','thrive')], normalize_data)
+bl <- munged_modeling[c('stroke_primary','LuCa','dement','thrive')]
+bl <- map(bl, ~mutate(., zscore = zscore/10)) # Rescale zscore to 10 units
 hosp_coxph_surv <- map(bl,
                        ~ coxph(Surv(time_from_event+0.1, cens_type %in% c(1,3))~Race + agegrp_at_event + Sex + zscore +
                                  Region + comorb_indx + time_on_dialysis, data = .) )
