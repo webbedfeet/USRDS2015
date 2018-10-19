@@ -36,8 +36,8 @@ munge_data <- function(d){
 }
 
 munged_modeling <- map(modeling_data, munge_data)
+save(munged_modeling, file = file.path(dropdir, 'munged_modeling.rda'), compress = T)
 
-wb <- createWorkbook()
 # Table 1 -------------------------------------------------------------------------------------
 
 getTable1 <- function(d){
@@ -63,9 +63,6 @@ tab1 <- tab1 %>% bind_rows(.id = 'Event') %>%
   add_blank_rows(.before = which(.$Event != '')[-1]) %>%
   mutate_all(~replace_na(., ''))
 
-addWorksheet(wb, 'Table 1')
-writeData(wb, 'Table 1', tab1)
-setColWidths(wb, 'Table 1', cols = 1:ncol(tab1), widths = 'auto')
 
 # Table 2 -------------------------------------------------------------------------------------
 
@@ -166,9 +163,6 @@ tbl2 <- map2(Perc, res_discontinutation, left_join, by=c("Race" = "term")) %>%
   add_blank_rows(.before = which(.$Event != '')[-1]) %>%
   mutate_all(~replace_na(., ''))
 
-addWorksheet(wb, 'Table 2')
-writeData(wb, 'Table 2', tbl2)
-setColWidths(wb,'Table 2', cols = 1:ncol(tbl2), widths = 'auto')
 
 # Table 3 -------------------------------------------------------------------------------------
 munged_modeling_young <- map(munged_modeling, ~filter(., age_at_event < 70) %>% 
@@ -250,7 +244,8 @@ bl_young <- modify_depth(cox_models_young, 2, ~select(., term, estimate) %>%
         mutate(sim_range = as.character(glue('({round(Min,2)},{round(Max,2)})'))) %>%
         select(term, sim_range) %>%
         rename(Race = term) %>%
-        rbind(data.frame(Race = 'White', sim_range = '1.00')))
+        add_row(Race = 'White', sim_range = '1.00', .before = 1))
+
 bl_old <- modify_depth(cox_models_old, 2, ~select(., term, estimate) %>%
                            mutate(estimate = exp(estimate))) %>%
   map(~bind_rows(.) %>%
@@ -261,22 +256,18 @@ bl_old <- modify_depth(cox_models_old, 2, ~select(., term, estimate) %>%
         mutate(sim_range = as.character(glue('({round(Min,2)},{round(Max,2)})'))) %>%
         select(term, sim_range) %>%
         rename(Race = term) %>%
-        rbind(data.frame(Race = 'White', sim_range = '1.00')))
+        add_row(Race = 'White', sim_range = '1.00', .before = 1))
 
 N_young <- map(munged_modeling_young, ~count(., Race) %>%
-                 mutate(Race = as.character(Race)) %>%
-                 mutate(Race = str_replace(Race, 'Native American', 'AI/AN')))
+                 mutate(Race = as.character(Race)))
 Perc_young = map(munged_modeling_young, ~group_by(., Race) %>%
              summarize(perc = round(100*mean(cens_type==3, na.rm=T),2)) %>%
-               mutate(Race = as.character(Race)) %>%
-               mutate(Race = str_replace(Race, 'Native American', 'AI/AN')))
+               mutate(Race = as.character(Race)))
 N_old <- map(munged_modeling_old, ~count(., Race) %>%
-                 mutate(Race = as.character(Race)) %>%
-                 mutate(Race = str_replace(Race, 'Native American', 'AI/AN')))
+                 mutate(Race = as.character(Race)))
 Perc_old = map(munged_modeling_old, ~group_by(., Race) %>%
              summarize(perc = round(100*mean(cens_type==3, na.rm=T),2)) %>%
-               mutate(Race = as.character(Race)) %>%
-               mutate(Race = str_replace(Race, 'Native American', 'AI/AN')))
+               mutate(Race = as.character(Race)))
 
 res_young <- N_young %>%
   map2(Perc_young, left_join) %>%
@@ -299,13 +290,19 @@ res_old <- N_old %>%
   filter(!is.na(Event))
 
 tbl3 <- res_young %>% left_join(res_old, by = c("Event", 'Race')) %>%
-  clean_cols(Event)
+  clean_cols(Event) %>% 
+  set_names(str_replace(names(.), '\\.x','_young')) %>% 
+  set_names(str_replace(names(.), '\\.y','_old')) %>% 
+  add_blank_rows(.before = which(.$Event != '')[-1]) %>% 
+  mutate_all(~replace_na(.,''))
+
 
 
 openxlsx::write.xlsx(list('Table 1'= tab1, 'Table 2' = tbl2, 'Table 3' = tbl3),
                      file = 'Tables.xlsx',
                      colWidths = 'auto',
                      creator = "Abhijit Dasgupta")
+
 
 # Figure 1 ------------------------------------------------------------------------------------
 
