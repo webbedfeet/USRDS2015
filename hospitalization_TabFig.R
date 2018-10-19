@@ -29,19 +29,21 @@ munge_data <- function(d){
     mutate(Race = fct_relevel(Race,
                               c("White", "Black",'Hispanic','Asian','Native American')) %>%
              fct_recode(c("AI/AN" = 'Native American'))) %>%
-    select(time_from_event, cens_type, age_at_event, agegrp_at_event, Race, Age = age_cat, Sex = SEX, Region = REGION, SES = zscore,
+    select(time_from_event, cens_type, age_at_event, agegrp_at_event, Race, Age = age_cat, Sex = SEX, Region = REGION, zscore,
             comorb_indx,
            time_on_dialysis)
   
 }
 
 munged_modeling <- map(modeling_data, munge_data)
+
+wb <- createWorkbook()
 # Table 1 -------------------------------------------------------------------------------------
 
 getTable1 <- function(d){
   out <- d %>%
     select(Race:time_on_dialysis) %>% 
-    rename(`SES score` = SES,
+    rename(`SES score` = zscore,
            `Comorbidity index` = comorb_indx,
            `Time on dialysis` = time_on_dialysis) %>% 
     tableone::CreateTableOne(data = ., strata = 'Race',
@@ -61,8 +63,9 @@ tab1 <- tab1 %>% bind_rows(.id = 'Event') %>%
   add_blank_rows(.before = which(.$Event != '')[-1]) %>%
   mutate_all(~replace_na(., ''))
 
-# openxlsx::write.xlsx(tab1, file = 'TableOne.xlsx', colWidths = 'auto')
-
+addWorksheet(wb, 'Table 1')
+writeData(wb, 'Table 1', tab1)
+setColWidths(wb, 'Table 1', cols = 1:ncol(tab1), widths = 'auto')
 
 # Table 2 -------------------------------------------------------------------------------------
 
@@ -97,11 +100,10 @@ out_crude <- map(cph1_list, ~tidy(.) %>% select(term, estimate, starts_with('con
                    mutate(term = ifelse(term == "Native American", 'AI/AN', term)) %>%
                    add_row(term = "White", res = '1.00 (ref)') %>% 
                    rename(cHR_disc = res))
-%>% 
 ### Adjusted
 hosp_coxph <- map(munged_modeling,
-                  ~ coxph(Surv(time_from_event+0.1, cens_type==3)~Race + agegrp_at_event + SEX + zscore +
-                            REGION + comorb_indx + time_on_dialysis, data = .) %>%
+                  ~ coxph(Surv(time_from_event+0.1, cens_type==3)~Race + agegrp_at_event + Sex + zscore +
+                            Region + comorb_indx + time_on_dialysis, data = .) %>%
                     broom::tidy() %>%
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
@@ -117,7 +119,7 @@ res_discontinutation <-  res_discontinutation[c('stroke_primary','LuCa','dement'
 
 ## Survival
 
-cph1_list_surv <-  map(modeling_data, ~ coxph(Surv(time_from_event, cens_type %in% c(1,3))~ Race,
+cph1_list_surv <-  map(munged_modeling, ~ coxph(Surv(time_from_event, cens_type %in% c(1,3))~ Race,
                                          data = .))
 out_crude_surv <- map(cph1_list_surv,
                       ~tidy(.) %>% select(term, estimate, starts_with('conf')) %>%
@@ -131,9 +133,9 @@ out_crude_surv <- map(cph1_list_surv,
                         rename(cHR_mort = res))
 
 ### Adjusted
-hosp_coxph_surv <- map(modeling_data,
-                  ~ coxph(Surv(time_from_event+0.1, cens_type %in% c(1,3))~Race + agegrp_at_event + SEX + zscore +
-                            REGION + comorb_indx + time_on_dialysis, data = .) %>%
+hosp_coxph_surv <- map(munged_modeling,
+                  ~ coxph(Surv(time_from_event+0.1, cens_type %in% c(1,3))~Race + agegrp_at_event + Sex + zscore +
+                            Region + comorb_indx + time_on_dialysis, data = .) %>%
                     broom::tidy() %>%
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
@@ -147,7 +149,7 @@ hosp_coxph_surv <- map(modeling_data,
 
 res_survival <- map2(out_crude_surv, hosp_coxph_surv, left_join)[c('stroke_primary','LuCa','dement','thrive')]
 
-Perc <- map(modeling_data, ~group_by(., Race) %>%
+Perc <- map(munged_modeling, ~group_by(., Race) %>%
               summarize(perc = round(100*mean(cens_type==3, na.rm=T), 2)) %>%
               ungroup() %>%
               mutate(Race = as.character(Race)) %>%
@@ -163,6 +165,10 @@ tbl2 <- map2(Perc, res_discontinutation, left_join, by=c("Race" = "term")) %>%
   clean_cols('Event') %>%
   add_blank_rows(.before = which(.$Event != '')[-1]) %>%
   mutate_all(~replace_na(., ''))
+
+addWorksheet(wb, 'Table 2')
+writeData(wb, 'Table 2', tbl2)
+setColWidths(wb,'Table 2', cols = 1:ncol(tbl2), widths = 'auto')
 
 # Table 3 -------------------------------------------------------------------------------------
 
@@ -256,17 +262,17 @@ bl_old <- modify_depth(cox_models_old, 2, ~select(., term, estimate) %>%
         rename(Race = term) %>%
         rbind(data.frame(Race = 'White', sim_range = '1.00')))
 
-N_young <- map(modeling_data_young, ~count(., Race) %>%
+N_young <- map(munged_modeling_young, ~count(., Race) %>%
                  mutate(Race = as.character(Race)) %>%
                  mutate(Race = str_replace(Race, 'Native American', 'AI/AN')))
-Perc_young = map(modeling_data_young, ~group_by(., Race) %>%
+Perc_young = map(munged_modeling_young, ~group_by(., Race) %>%
              summarize(perc = round(100*mean(cens_type==3, na.rm=T),2)) %>%
                mutate(Race = as.character(Race)) %>%
                mutate(Race = str_replace(Race, 'Native American', 'AI/AN')))
-N_old <- map(modeling_data_old, ~count(., Race) %>%
+N_old <- map(munged_modeling_old, ~count(., Race) %>%
                  mutate(Race = as.character(Race)) %>%
                  mutate(Race = str_replace(Race, 'Native American', 'AI/AN')))
-Perc_old = map(modeling_data_old, ~group_by(., Race) %>%
+Perc_old = map(munged_modeling_old, ~group_by(., Race) %>%
              summarize(perc = round(100*mean(cens_type==3, na.rm=T),2)) %>%
                mutate(Race = as.character(Race)) %>%
                mutate(Race = str_replace(Race, 'Native American', 'AI/AN')))
@@ -304,9 +310,9 @@ openxlsx::write.xlsx(list('Table 1'= tab1, 'Table 2' = tbl2, 'Table 3' = tbl3),
 
 library(survival)
 library(survminer)
-load(file.path(dropdir, 'modeling_data.rda'))
+load(file.path(dropdir, 'munged_modeling.rda'))
 
-d <- bind_rows(modeling_data, .id = 'Event') %>%
+d <- bind_rows(munged_modeling, .id = 'Event') %>%
   mutate(Event = events[Event]) %>%
   filter(!is.na(Event)) %>%
   mutate(Race  = str_replace(Race, 'Native American','AI/AN')) %>%
@@ -400,36 +406,36 @@ ggsave('Figure2a.pdf', width = 12, height = 7)
 
 # Supplementary Table 1 -----------------------------------------------------------------------
 
-load(file.path(dropdir, 'modeling_data.rda'))
+load(file.path(dropdir, 'munged_modeling.rda'))
 race_order <- c("White",'Black','Hispanic','Asian','AI/AN')
 events <- c('stroke_primary' = 'Stroke',
             'LuCa' = "Lung cancer",
             'dement' = "Dementia",
             'thrive' = 'Failure to thrive')
-lbls <- c('Race' = 'Race', 'agegrp_at_event' = 'Age',  'SEX'  = 'Gender',
-          'zscore' = 'SES Score', 'REGION' = 'Region', 'comorb_indx' = 'Comorbidity',
+lbls <- c('Race' = 'Race', 'agegrp_at_event' = 'Age',  'Sex'  = 'Gender',
+          'zscore' = 'SES Score', 'Region' = 'Region', 'comorb_indx' = 'Comorbidity',
           'time_on_dialysis' = 'Time on Dialysis')
 
 normalize_data <- function(d){
   require(tidyverse)
-  d %>% select(time_from_event, cens_type, Race, agegrp_at_event, SEX, zscore, REGION,
+  d %>% select(time_from_event, cens_type, Race, agegrp_at_event, Sex, zscore, Region,
                comorb_indx, time_on_dialysis) %>%
     mutate_if(is.character, as.factor) %>%
     mutate(time_on_diaylsis = as.numeric(time_on_dialysis)) %>%
     mutate(Race = fct_recode(Race, 'AI/AN' = 'Native American'),
            Race = fct_relevel(Race, race_order),
-           SEX = fct_recode(SEX, Male = '1', Female = '2'),
-           SEX = fct_relevel(SEX, 'Male'),
-           REGION = fct_relevel(REGION, 'Northeast'),
+           Sex = fct_recode(Sex, Male = '1', Female = '2'),
+           Sex = fct_relevel(Sex, 'Male'),
+           Region = fct_relevel(Region, 'Northeast'),
            zscore = zscore/10,
            time_on_dialysis = time_on_dialysis/31.42) %>%
     as_tibble()
 }
 
-bl <- map(modeling_data[c('stroke_primary','LuCa','dement','thrive')], normalize_data)
+bl <- map(munged_modeling[c('stroke_primary','LuCa','dement','thrive')], normalize_data)
 hosp_coxph_surv <- map(bl,
-                       ~ coxph(Surv(time_from_event+0.1, cens_type %in% c(1,3))~Race + agegrp_at_event + SEX + zscore +
-                                 REGION + comorb_indx + time_on_dialysis, data = .) )
+                       ~ coxph(Surv(time_from_event+0.1, cens_type %in% c(1,3))~Race + agegrp_at_event + Sex + zscore +
+                                 Region + comorb_indx + time_on_dialysis, data = .) )
 
 res <-  map(hosp_coxph_surv, table_results.coxph, lbls = lbls,tidy = F)
 for (nm in names(res)) {
