@@ -10,3 +10,5 @@ h2ologs/*
 data/*
 *.log
 2014_15_report_cache/*
+*.xlsx
+
