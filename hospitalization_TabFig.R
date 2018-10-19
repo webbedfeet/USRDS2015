@@ -298,11 +298,37 @@ tbl3 <- res_young %>% left_join(res_old, by = c("Event", 'Race')) %>%
 
 
 
-openxlsx::write.xlsx(list('Table 1'= tab1, 'Table 2' = tbl2, 'Table 3' = tbl3),
+
+# Supplementary Table 1 -----------------------------------------------------------------------
+
+load(file.path(dropdir, 'munged_modeling.rda'))
+race_order <- c("White",'Black','Hispanic','Asian','AI/AN')
+events <- c('stroke_primary' = 'Stroke',
+            'LuCa' = "Lung cancer",
+            'dement' = "Dementia",
+            'thrive' = 'Failure to thrive')
+lbls <- c('Race' = 'Race', 'agegrp_at_event' = 'Age',  'Sex'  = 'Gender',
+          'zscore' = 'SES Score', 'Region' = 'Region', 'comorb_indx' = 'Comorbidity',
+          'time_on_dialysis' = 'Time on Dialysis')
+
+
+bl <- munged_modeling[c('stroke_primary','LuCa','dement','thrive')]
+bl <- map(bl, ~mutate(., zscore = zscore/10)) # Rescale zscore to 10 units
+hosp_coxph_surv <- map(bl,
+                       ~ coxph(Surv(time_from_event+0.1, cens_type %in% c(1,3))~Race + agegrp_at_event + Sex + zscore +
+                                 Region + comorb_indx + time_on_dialysis, data = .) )
+
+res <-  map(hosp_coxph_surv, table_results.coxph, lbls = lbls,tidy = F)
+for (nm in names(res)) {
+  res[[nm]] <- res[[nm]] %>% set_names(c('Variable',events[nm]))
+}
+results <- Reduce(left_join, res)
+
+openxlsx::write.xlsx(list('Table 1'= tab1, 'Table 2' = tbl2, 'Table 3' = tbl3,
+                          'Supplementary Table 1' = results),
                      file = 'Tables.xlsx',
                      colWidths = 'auto',
                      creator = "Abhijit Dasgupta")
-
 
 # Figure 1 ------------------------------------------------------------------------------------
 
@@ -407,35 +433,4 @@ ggplot(bl, aes(x = estimate)) + geom_density() +
 ggsave('Figure2a.pdf', width = 12, height = 7)
 
 
-# Supplementary Table 1 -----------------------------------------------------------------------
 
-load(file.path(dropdir, 'munged_modeling.rda'))
-race_order <- c("White",'Black','Hispanic','Asian','AI/AN')
-events <- c('stroke_primary' = 'Stroke',
-            'LuCa' = "Lung cancer",
-            'dement' = "Dementia",
-            'thrive' = 'Failure to thrive')
-lbls <- c('Race' = 'Race', 'agegrp_at_event' = 'Age',  'Sex'  = 'Gender',
-          'zscore' = 'SES Score', 'Region' = 'Region', 'comorb_indx' = 'Comorbidity',
-          'time_on_dialysis' = 'Time on Dialysis')
-
-
-bl <- munged_modeling[c('stroke_primary','LuCa','dement','thrive')]
-bl <- map(bl, ~mutate(., zscore = zscore/10)) # Rescale zscore to 10 units
-hosp_coxph_surv <- map(bl,
-                       ~ coxph(Surv(time_from_event+0.1, cens_type %in% c(1,3))~Race + agegrp_at_event + Sex + zscore +
-                                 Region + comorb_indx + time_on_dialysis, data = .) )
-
-res <-  map(hosp_coxph_surv, table_results.coxph, lbls = lbls,tidy = F)
-for (nm in names(res)) {
-  res[[nm]] <- res[[nm]] %>% set_names(c('Variable',events[nm]))
-}
-results <- Reduce(left_join, res)
-
-library(openxlsx)
-boldHeader <- createStyle(textDecoration = 'bold')
-wb <- loadWorkbook('Tables.xlsx')
-if (!('Supplemental Table 1' %in% names(wb))) addWorksheet(wb, 'Supplemental Table 1')
-writeData(wb, 'Supplemental Table 1', results, headerStyle = boldHeader)
-setColWidths(wb, 'Supplemental Table 1', cols = 1:ncol(results), widths = 'auto')
-saveWorkbook(wb, 'Tables.xlsx', overwrite = T)
