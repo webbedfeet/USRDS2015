@@ -395,8 +395,8 @@ cox_models %>% modify_depth(2, ~select(., term, estimate) %>%
                               mutate(term = str_remove(term, 'Race'),
                                      term = str_replace(term, 'Native American','AI/AN'),
                                      estimate = exp(estimate))) %>%
-  map(bind_rows) %>%
-  bind_rows(.id = 'Event') %>%
+  map(bind_rows) %>% # Collapse the internal list
+  bind_rows(.id = 'Event') %>% # Collapse the external list
   mutate(Event = events[Event]) %>%
   mutate(Race = as.factor(term),
          Event = as.factor(Event)) %>%
@@ -420,12 +420,12 @@ cox_models %>% modify_depth(2, ~select(., term, estimate) %>%
 ggplot(bl, aes(x = estimate)) + geom_density() +
   facet_grid(Event ~ Race, scales = 'free', switch = 'y', space = 'free_x') +
   geom_vline(xintercept = 1, linetype = 2) +
-  scale_x_continuous(breaks = c(1, seq(0.7, 1.8, by = 0.2)))+
+  scale_x_continuous(breaks = c(1, seq(0.7, 1.8, by = 0.2)))+ # Unified the x-axis ticks
   labs(x = 'Adjusted HR, compared to Whites', y = '') +
   theme(strip.text = element_text(size = 14, face = 'bold'),
-        strip.text.y = element_text(angle = 180),
+        strip.text.y = element_text(angle = 180), # Rotate the y-axis labels
         strip.background = element_rect(fill = 'white'),
-        strip.placement = 'outside',
+        strip.placement = 'outside', # Move labels outside the borders
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
         axis.text.x = element_text(size = 8),
