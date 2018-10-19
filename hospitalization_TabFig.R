@@ -171,9 +171,10 @@ writeData(wb, 'Table 2', tbl2)
 setColWidths(wb,'Table 2', cols = 1:ncol(tbl2), widths = 'auto')
 
 # Table 3 -------------------------------------------------------------------------------------
-
-munged_modeling_young <- map(munged_modeling, ~filter(., age_at_event < 70))
-munged_modeling_old <- map(munged_modeling, ~filter(., age_at_event >= 70))
+munged_modeling_young <- map(munged_modeling, ~filter(., age_at_event < 70) %>% 
+                               mutate(agegrp_at_event = fct_drop(agegrp_at_event)))
+munged_modeling_old <- map(munged_modeling, ~filter(., age_at_event >= 70) %>% 
+                               mutate(agegrp_at_event = fct_drop(agegrp_at_event)))
 
 ## Discontinuation
 ### Adjusted
