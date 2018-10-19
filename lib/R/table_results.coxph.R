@@ -36,7 +36,7 @@ table_results.coxph <- function(mod, lbls = NULL, tidy = F){
   if(nrow(baselevels) > 0){ # Do we have categorical predictors
     for(i in 1:nrow(baselevels)){
       out <- out %>% add_row(variables = baselevels[i,1], levels = baselevels[i,2],
-                             res = '1', .before = which.max(out$variables == baselevels[i,1]))
+                             res = '1.00 (ref)', .before = which.max(out$variables == baselevels[i,1]))
     }
     if (!tidy){
       for (i in 1:nrow(baselevels)){
