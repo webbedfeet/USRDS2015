@@ -313,7 +313,7 @@ load(file.path(dropdir, 'munged_modeling.rda'))
 d <- bind_rows(munged_modeling, .id = 'Event') %>%
   mutate(Event = events[Event]) %>%
   filter(!is.na(Event)) %>%
-  mutate(Race  = str_replace(Race, 'Native American','AI/AN')) %>%
+  # mutate(Race  = str_replace(Race, 'Native American','AI/AN')) %>%
   mutate_at(vars(Event, Race), as.factor) %>%
   mutate(Event = fct_relevel(Event, c('Stroke','Lung cancer','Dementia','Failure to thrive')),
          Race = fct_relevel(Race, c('White','Black','Hispanic','Asian','AI/AN')))
@@ -322,10 +322,13 @@ bl <- d %>% nest(-Event) %>%
   mutate(mods = map(data, ~survfit(Surv(time_from_event, cens_type == 3) ~ Race, data = .))) %>%
   mutate(plots = map2(data, mods, ~ggsurvplot(.y, data = .x, fun = function(y) 1-y,
                                               conf.int = F, pval = F, censor = F)$plot +
-                        labs(x = '', y = '')+ylim(0,1)+xlim(0,1000) +
+                        labs(x = '', y = '')+ylim(0,1)+coord_cartesian(xlim=c(0,1000)) +
+                        scale_color_manual(name = 'Race', values = 1:5,labels = c('White','Black','Hispanic','Asian','AI/AN'))+
                         theme(axis.text.x = element_blank(), axis.ticks.x= element_blank(), legend.position = 'none',
                               axis.text.y = element_text(size = 9))))
-legend_b <- get_legend(bl$plots[[4]]+theme(legend.position='bottom', legend.text = element_text(size = 8)))
+legend_b <- get_legend(bl$plots[[4]]+
+                         theme(legend.position='bottom', legend.title = element_text(size = 12), 
+                               legend.text = element_text(size = 10)))
 bl$plots[[4]] <- bl$plots[[4]]  + theme(axis.ticks.x = element_line(),
                                                                      axis.text.x = element_text(size = 10))
 
@@ -341,7 +344,8 @@ bl2 <- d %>%
   nest(-Event) %>%
   mutate(mods = map(data, ~survfit(Surv(time_from_event, cens_type %in% c(1,3)) ~ Race, data = .))) %>%
   mutate(plots = map2(data, mods, ~ggsurvplot(.y, data = .x, conf.int = F, pval = F, censor = F)$plot+
-                        labs(x = '', y = '') + ylim(0,1)+
+                        labs(x = '', y = '') + ylim(0,1)+ coord_cartesian(xlim = c(0,1000))+
+                        scale_color_manual(name = 'Race', values = 1:5,labels = c('White','Black','Hispanic','Asian','AI/AN'))+
                         theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
                               legend.position = 'none',
                               axis.text.y = element_text(size = 9))))
@@ -374,22 +378,23 @@ cox_models %>% modify_depth(2, ~select(., term, estimate) %>%
          Event = fct_relevel(Event, c('Stroke','Lung cancer','Dementia', 'Failure to thrive'))) %>%
   select(-term) -> bl
 
-ggplot(bl, aes(x = estimate)) + geom_density() +
-  facet_grid(Event ~ Race, scales = 'free', switch = 'y') +
-  geom_vline(xintercept = 1, linetype = 2) +
-  labs(x = 'Adjusted HR, compared to Whites', y = '') +
-  theme(strip.text = element_text(size = 14, face = 'bold'),
-        strip.text.y = element_text(angle = 180),
-        strip.background = element_rect(fill = 'white'),
-        strip.placement = 'outside',
-        axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        panel.spacing.x = unit(2, 'lines'))
-ggsave('Figure2.pdf', width = 12, height = 7)
+# ggplot(bl, aes(x = estimate)) + geom_density() +
+#   facet_grid(Event ~ Race, scales = 'free', switch = 'y') +
+#   geom_vline(xintercept = 1, linetype = 2) +
+#   labs(x = 'Adjusted HR, compared to Whites', y = '') +
+#   theme(strip.text = element_text(size = 14, face = 'bold'),
+#         strip.text.y = element_text(angle = 180),
+#         strip.background = element_rect(fill = 'white'),
+#         strip.placement = 'outside',
+#         axis.text.y = element_blank(),
+#         axis.ticks.y = element_blank(),
+#         panel.spacing.x = unit(2, 'lines'))
+# ggsave('Figure2.pdf', width = 12, height = 7)
 
 ggplot(bl, aes(x = estimate)) + geom_density() +
   facet_grid(Event ~ Race, scales = 'free', switch = 'y', space = 'free_x') +
   geom_vline(xintercept = 1, linetype = 2) +
+  scale_x_continuous(breaks = c(1, seq(0.7, 1.8, by = 0.2)))+
   labs(x = 'Adjusted HR, compared to Whites', y = '') +
   theme(strip.text = element_text(size = 14, face = 'bold'),
         strip.text.y = element_text(angle = 180),
