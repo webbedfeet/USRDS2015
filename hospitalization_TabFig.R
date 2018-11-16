@@ -35,6 +35,11 @@ munge_data <- function(d){
   
 }
 
+events <- c('stroke_primary' = 'Stroke',
+            'LuCa' = "Lung cancer",
+            'dement' = "Dementia",
+            'thrive' = 'Failure to thrive')
+
 munged_modeling <- map(modeling_data, munge_data)
 save(munged_modeling, file = file.path(dropdir, 'munged_modeling.rda'), compress = T)
 
@@ -66,10 +71,6 @@ tab1 <- tab1 %>% bind_rows(.id = 'Event') %>%
 
 # Table 2 -------------------------------------------------------------------------------------
 
-events <- c('stroke_primary' = 'Stroke',
-            'LuCa' = "Lung cancer",
-            'dement' = "Dementia",
-            'thrive' = 'Failure to thrive')
 
 ## Discontinuation
 
@@ -346,22 +347,33 @@ d <- bind_rows(munged_modeling, .id = 'Event') %>%
 
 bl <- d %>% nest(-Event) %>%
   mutate(mods = map(data, ~survfit(Surv(time_from_event, cens_type == 3) ~ Race, data = .))) %>%
-  mutate(plots = map2(data, mods, ~ggsurvplot(.y, data = .x, fun = function(y) 1-y,
-                                              conf.int = F, pval = F, censor = F)$plot +
-                        labs(x = '', y = '')+ylim(0,1)+coord_cartesian(xlim=c(0,1000)) +
-                        scale_color_manual(name = 'Race', values = 1:5,labels = c('White','Black','Hispanic','Asian','AI/AN'))+
-                        theme(axis.text.x = element_blank(), axis.ticks.x= element_blank(), legend.position = 'none',
-                              axis.text.y = element_text(size = 9))))
-legend_b <- get_legend(bl$plots[[4]]+
-                         theme(legend.position='bottom', legend.title = element_text(size = 12), 
-                               legend.text = element_text(size = 10)))
+  mutate(survdata = map(mods, ~broom::tidy(.) %>% mutate(strata = str_remove(strata,'Race=')) %>% 
+                          mutate(strata = factor(strata, levels = c('White','Black','Hispanic','Asian','AI/AN'))) %>% 
+                          rename(Race = strata) %>% 
+                          filter(time <= 1000))) %>% 
+  mutate(plots = map(survdata, ~ggplot(., aes(x = time, y = 1-estimate, color=Race)) +
+                       geom_step() + 
+                       scale_y_continuous(breaks = seq(0, 0.5, by=0.1), limits= c(0, 0.5))+
+                       labs(x = '', y = '') +
+                       theme(axis.text.x = element_blank(),
+                             axis.ticks.x = element_blank(),
+                             legend.position = 'none',
+                             axis.text.y = element_text(size=9))))
+
+legend_b <- ggdraw(plot_grid(NULL,
+                             get_legend(bl$plots[[4]] +
+                         theme(legend.position='bottom', 
+                               legend.title = element_text(size = 12, face = 'bold'), 
+                               legend.text = element_text(size = 10))),
+                         NULL, 
+                         nrow = 1))
 bl$plots[[4]] <- bl$plots[[4]]  + theme(axis.ticks.x = element_line(),
-                                                                     axis.text.x = element_text(size = 10))
+                                        axis.text.x = element_text(size = 10))
 
 plt_disc <- plot_grid(plotlist = bl$plots, ncol = 1, align = 'v', rel_heights = c(1,1,1,1.2),
-          labels = levels(d$Event), label_size = 10, label_x = 0.2, vjust = 1, hjust = 0) +
-  draw_label('Probability', x = 0.02, y = 0.5, angle = 90, hjust = 0.2)
-title = ggdraw() + draw_label('Discontinuation', fontface='bold')
+          labels = levels(d$Event), label_size = 10, label_x = 0.25, vjust = 1, hjust = 0) +
+  draw_label('Probability', x = 0.02, y = 0.5, angle = 90, hjust = 0.2, vjust = 1)
+title = ggdraw() + draw_label('Discontinuation', fontface = 'bold')
 bottom = ggdraw() + draw_label('Days from event', size = 12)
 
 plt_disc_complete <- plot_grid(title, plt_disc, ncol = 1, rel_heights = c(0.1, 1))
@@ -369,23 +381,29 @@ plt_disc_complete <- plot_grid(title, plt_disc, ncol = 1, rel_heights = c(0.1, 1
 bl2 <- d %>%
   nest(-Event) %>%
   mutate(mods = map(data, ~survfit(Surv(time_from_event, cens_type %in% c(1,3)) ~ Race, data = .))) %>%
-  mutate(plots = map2(data, mods, ~ggsurvplot(.y, data = .x, conf.int = F, pval = F, censor = F)$plot+
-                        labs(x = '', y = '') + ylim(0,1)+ coord_cartesian(xlim = c(0,1000))+
-                        scale_color_manual(name = 'Race', values = 1:5,labels = c('White','Black','Hispanic','Asian','AI/AN'))+
-                        theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
-                              legend.position = 'none',
-                              axis.text.y = element_text(size = 9))))
+  mutate(survdata = map(mods, ~broom::tidy(.) %>% mutate(strata = str_remove(strata, 'Race=')) %>% 
+                          filter(time <= 1000) %>% 
+                          mutate(strata = factor(strata, levels = c('White','Black','Hispanic','Asian','AI/AN'))))) %>% 
+  mutate(plots = map(survdata, ~ggplot(., aes(x = time, y = estimate, color=strata)) +
+                       geom_step() + 
+                       scale_y_continuous(breaks = seq(0, 1, by=0.25)) +
+                       labs(x = '', y = '') +
+                       theme(axis.text.x = element_blank(),
+                             axis.ticks.x = element_blank(),
+                             legend.position = 'none',
+                             axis.text.y = element_text(size=9))))
+
 bl2$plots[[4]] <- bl2$plots[[4]] +
   theme(axis.ticks.x = element_line(), axis.text.x = element_text(size = 10))
-plt_surv <- plot_grid(plotlist = bl2$plots, ncol = 1, align='v', rel_heights = c(1,1,1,1.2),
-                      labels = levels(d$Event), label_size = 10, label_x = 0.25, vjust = 1, hjust = 0)
+plt_surv <- plot_grid(plotlist = bl2$plots, ncol = 1, align = 'v', rel_heights = c(1,1,1,1.2),
+                      labels = levels(d$Event), label_size = 10, label_x = 0.3, vjust = 1, hjust = 0)
 title2 = ggdraw() + draw_label('Mortality', fontface = 'bold')
 plt_surv_complete = plot_grid(title2, plt_surv, ncol = 1, rel_heights = c(0.1, 1))
 
 plt <- plot_grid(plt_disc_complete, plt_surv_complete, nrow = 1, align = 'h') %>%
   plot_grid(bottom, ncol = 1, rel_heights = c(1,0.05)) %>%
   plot_grid(legend_b, ncol = 1, rel_heights = c(1, 0.1))
-ggsave('Figure1.pdf', width = 8, height = 7)
+ggsave('Figure1.pdf', width = 6, height = 8)
 
 # Figure 2 ------------------------------------------------------------------------------------
 
