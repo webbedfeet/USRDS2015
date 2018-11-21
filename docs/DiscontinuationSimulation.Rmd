@@ -1,0 +1,35 @@
+---
+title: "Simulating discontinuation to replicate one group experience"
+description: |
+  We want to simulate data for different ethnic groups that reflects the dialysis discontinuation
+  experience of White patients, so that we can see how much the survival patterns in these groups 
+  is affected by imposing a different discontinuation pattern on them, and whether that discontinuation
+  pattern significantly affects the resultant simulated survival and changes qualitative findings. 
+author:
+  - name: Abhijit Dasgupta
+    url: https://www.github.com/webbedfeet/USRDS2015/docs/DiscontinuationSimulation.html
+    affiliation: NIAMS/NIH
+    affiliation_url: https://niams.nih.gov
+date: "`r Sys.Date()`"
+output: radix::radix_article
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Introduction to the problem
+
+We believe that one of the primary drivers of survival disparities among dialysis patients is a 
+differential propensity to voluntarily discontinue dialysis. Our data provides evidence that discontinuation
+rates are higher (or, time from first dialysis to discontinuation is shorter) among whites than other 
+ethnic groups, even accounting for socio-economic status. 
+
+# A computational strategy
+
+# Computational implementation
+
+# Results
+
+# Conclusions
+
