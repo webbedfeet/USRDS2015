@@ -3,9 +3,8 @@
 - tidyverse
 - broom
 - openxlsx
-- tableone
 - glue
-- rms
+- tableone
 - impute-bioC
 - DBI
 - stringr
