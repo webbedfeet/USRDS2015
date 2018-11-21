@@ -319,11 +319,12 @@ hosp_coxph_surv <- map(bl,
                        ~ coxph(Surv(time_from_event+0.1, cens_type %in% c(1,3))~Race + agegrp_at_event + Sex + zscore +
                                  Region + comorb_indx + time_on_dialysis, data = .) )
 
-res <-  map(hosp_coxph_surv, table_results.coxph, lbls = lbls,tidy = F)
+res <-  map(hosp_coxph_surv, table_results.coxph, lbls = lbls,tidy = F, dig = 3)
 for (nm in names(res)) {
   res[[nm]] <- res[[nm]] %>% set_names(c('Variable',events[nm]))
 }
-results <- Reduce(left_join, res)
+results <- Reduce(left_join, res) %>% 
+  mutate(Variable = format_agegrp(Variable))
 
 openxlsx::write.xlsx(list('Table 1'= tab1, 'Table 2' = tbl2, 'Table 3' = tbl3,
                           'Supplementary Table 1' = results),
@@ -350,9 +351,10 @@ bl <- d %>% nest(-Event) %>%
   mutate(survdata = map(mods, ~broom::tidy(.) %>% mutate(strata = str_remove(strata,'Race=')) %>% 
                           mutate(strata = factor(strata, levels = c('White','Black','Hispanic','Asian','AI/AN'))) %>% 
                           rename(Race = strata) %>% 
-                          filter(time <= 1000))) %>% 
+                          filter(time <= 750))) %>% # Restrict to 750 days (2 years) 
   mutate(plots = map(survdata, ~ggplot(., aes(x = time, y = 1-estimate, color=Race)) +
                        geom_step() + 
+                       scale_x_continuous(breaks = seq(0,750, by=150))+
                        scale_y_continuous(breaks = seq(0, 0.5, by=0.1), limits= c(0, 0.5))+
                        labs(x = '', y = '') +
                        theme(axis.text.x = element_blank(),
@@ -382,10 +384,11 @@ bl2 <- d %>%
   nest(-Event) %>%
   mutate(mods = map(data, ~survfit(Surv(time_from_event, cens_type %in% c(1,3)) ~ Race, data = .))) %>%
   mutate(survdata = map(mods, ~broom::tidy(.) %>% mutate(strata = str_remove(strata, 'Race=')) %>% 
-                          filter(time <= 1000) %>% 
+                          filter(time <= 750) %>% # Restrict time to 750 days
                           mutate(strata = factor(strata, levels = c('White','Black','Hispanic','Asian','AI/AN'))))) %>% 
   mutate(plots = map(survdata, ~ggplot(., aes(x = time, y = estimate, color=strata)) +
                        geom_step() + 
+                       scale_x_continuous(breaks = seq(0,750,by=150))+
                        scale_y_continuous(breaks = seq(0, 1, by=0.25)) +
                        labs(x = '', y = '') +
                        theme(axis.text.x = element_blank(),
@@ -403,7 +406,7 @@ plt_surv_complete = plot_grid(title2, plt_surv, ncol = 1, rel_heights = c(0.1, 1
 plt <- plot_grid(plt_disc_complete, plt_surv_complete, nrow = 1, align = 'h') %>%
   plot_grid(bottom, ncol = 1, rel_heights = c(1,0.05)) %>%
   plot_grid(legend_b, ncol = 1, rel_heights = c(1, 0.1))
-ggsave('Figure1.pdf', width = 6, height = 8)
+ggsave('graphs/Figure1.pdf', width = 6, height = 8)
 
 # Figure 2 ------------------------------------------------------------------------------------
 
@@ -448,7 +451,7 @@ ggplot(bl, aes(x = estimate)) + geom_density() +
         axis.ticks.y = element_blank(),
         axis.text.x = element_text(size = 8),
         panel.spacing.x = unit(2, 'lines'))
-ggsave('Figure2a.pdf', width = 12, height = 7)
+ggsave('graphs/Figure2a.pdf', width = 12, height = 7)
 
 
 
