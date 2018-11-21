@@ -322,7 +322,8 @@ res <-  map(hosp_coxph_surv, table_results.coxph, lbls = lbls,tidy = F, dig = 3)
 for (nm in names(res)) {
   res[[nm]] <- res[[nm]] %>% set_names(c('Variable',events[nm]))
 }
-results <- Reduce(left_join, res)
+results <- Reduce(left_join, res) %>% 
+  mutate(Variable = format_agegrp(Variable))
 
 openxlsx::write.xlsx(list('Table 1'= tab1, 'Table 2' = tbl2, 'Table 3' = tbl3,
                           'Supplementary Table 1' = results),
