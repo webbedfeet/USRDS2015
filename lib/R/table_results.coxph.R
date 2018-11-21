@@ -10,6 +10,7 @@
 #' @param mod A `coxph` object
 #' @param lbls An optional named vector providing readable labels for each predictor variable
 #' @param tidy A boolean (default=F) determining if the output is a tidy tibble or a untidy printable table. Use `tidy = T` if you want to further manipulate the table, or add other results to this table using joins, for example
+#' @param dig Number of digits to show in the output
 #'
 #' @return A tibble
 #' @export
@@ -17,14 +18,14 @@
 #' @examples
 #' library(survival)
 #' 
-table_results.coxph <- function(mod, lbls = NULL, tidy = F){
+table_results.coxph <- function(mod, lbls = NULL, tidy = F, dig = 2){
   require(survival)
   require(dplyr)
   require(broom)
   out <- tidy(mod) %>% select(term, estimate, conf.low, conf.high) %>% 
     mutate_at(vars(-term), exp) %>% 
     mutate(res = as.character(
-      glue::glue('{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high, 2)})'))) %>% 
+      glue::glue('{round(estimate,dig)} ({round(conf.low, dig)}, {round(conf.high, dig)})'))) %>% 
     select(term, res)
   out <- out %>% 
     mutate(variables = str_extract(term, paste(attr(mod$terms, 'term.labels'), collapse='|'))) %>% 

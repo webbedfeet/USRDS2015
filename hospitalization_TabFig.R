@@ -318,7 +318,7 @@ hosp_coxph_surv <- map(bl,
                        ~ coxph(Surv(time_from_event+0.1, cens_type %in% c(1,3))~Race + agegrp_at_event + Sex + zscore +
                                  Region + comorb_indx + time_on_dialysis, data = .) )
 
-res <-  map(hosp_coxph_surv, table_results.coxph, lbls = lbls,tidy = F)
+res <-  map(hosp_coxph_surv, table_results.coxph, lbls = lbls,tidy = F, dig = 3)
 for (nm in names(res)) {
   res[[nm]] <- res[[nm]] %>% set_names(c('Variable',events[nm]))
 }
