@@ -13,9 +13,9 @@
 format_agegrp <- function(str_vec){
   bl = function(tst){
     y = str_replace(tst,'\\d{2}\\)', function(u){
-      as.character(as.numeric(str_extract(u, '\\d{2}'))-1)
+      as.character(as.numeric(str_extract(u, '\\d{2}'))-1) # Grab the second number and reduce by 1
     })
-    return(str_replace(y, '\\[(\\d{2}),(\\d{2})','\\1-\\2'))
+    return(str_replace(y, '\\[(\\d{2}),(\\d{2})','\\1-\\2')) # Re-format to a-b format
   }
-  str_replace(str_vec, '\\[\\d{2},\\d{2}\\)',bl)
+  str_replace(str_vec, '\\[\\d{2},\\d{2}\\)',bl) # Vectorized output
 }
