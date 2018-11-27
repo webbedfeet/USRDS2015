@@ -324,10 +324,22 @@ for (nm in names(res)) {
   res[[nm]] <- res[[nm]] %>% set_names(c('Variable',events[nm]))
 }
 results <- Reduce(left_join, res) %>% 
-  mutate(Variable = format_agegrp(Variable))
+  mutate(Variable = format_interval(Variable))
+
+## Adding full model for discontinuation
+hosp_coxph_disc <- map(bl,
+                  ~ coxph(Surv(time_from_event+0.1, cens_type==3)~Race + agegrp_at_event + Sex + zscore +
+                            Region + comorb_indx + time_on_dialysis, data = .)) 
+res_disc <- map(hosp_coxph_disc, table_results.coxph, lbls=lbls, tidy=F, dig = 3)
+for (nm in names(res_disc)){
+  res_disc[[nm]] <- res_disc[[nm]] %>% set_names(c('Variable',events[nm]))
+  
+}
+res_disc <- Reduce(left_join, res_disc) %>% mutate(Variable = format_interval(Variable))
 
 openxlsx::write.xlsx(list('Table 1'= tab1, 'Table 2' = tbl2, 'Table 3' = tbl3,
-                          'Supplementary Table 1' = results),
+                          'Supplementary Table 1' = results,
+                          'Supplementary Table 1a' = res_disc),
                      file = 'Tables.xlsx',
                      colWidths = 'auto',
                      creator = "Abhijit Dasgupta")
@@ -373,7 +385,8 @@ bl$plots[[4]] <- bl$plots[[4]]  + theme(axis.ticks.x = element_line(),
                                         axis.text.x = element_text(size = 10))
 
 plt_disc <- plot_grid(plotlist = bl$plots, ncol = 1, align = 'v', rel_heights = c(1,1,1,1.2),
-          labels = levels(d$Event), label_size = 10, label_x = 0.25, vjust = 1, hjust = 0) +
+          labels = levels(d$Event), label_size = 10, label_x = 0.25, vjust = 1, hjust = 0)
++
   draw_label('Probability', x = 0.02, y = 0.5, angle = 90, hjust = 0.2, vjust = 1)
 title = ggdraw() + draw_label('Discontinuation', fontface = 'bold')
 bottom = ggdraw() + draw_label('Days from event', size = 12)
@@ -389,7 +402,7 @@ bl2 <- d %>%
   mutate(plots = map(survdata, ~ggplot(., aes(x = time, y = estimate, color=strata)) +
                        geom_step() + 
                        scale_x_continuous(breaks = seq(0,750,by=150))+
-                       scale_y_continuous(breaks = seq(0, 1, by=0.25)) +
+                       scale_y_continuous(breaks = seq(0, 1, by=0.25), limits = c(0,1)) +
                        labs(x = '', y = '') +
                        theme(axis.text.x = element_blank(),
                              axis.ticks.x = element_blank(),
@@ -403,7 +416,10 @@ plt_surv <- plot_grid(plotlist = bl2$plots, ncol = 1, align = 'v', rel_heights =
 title2 = ggdraw() + draw_label('Mortality', fontface = 'bold')
 plt_surv_complete = plot_grid(title2, plt_surv, ncol = 1, rel_heights = c(0.1, 1))
 
-plt <- plot_grid(plt_disc_complete, plt_surv_complete, nrow = 1, align = 'h') %>%
+plt1 <- plot_grid(plt_disc_complete, plt_surv_complete, nrow=1, rel_widths = c(0.95, 1)) + 
+  draw_label('Probability', x = 0.02, y = 0.5, angle = 90, hjust = 0.2, vjust = 0.3)
+
+plt <- plt1 %>% 
   plot_grid(bottom, ncol = 1, rel_heights = c(1,0.05)) %>%
   plot_grid(legend_b, ncol = 1, rel_heights = c(1, 0.1))
 ggsave('graphs/Figure1.pdf', width = 6, height = 8)
