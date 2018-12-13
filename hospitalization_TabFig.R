@@ -29,6 +29,9 @@ munge_data <- function(d){
     mutate(Race = fct_relevel(Race,
                               c("White", "Black",'Hispanic','Asian','Native American')) %>%
              fct_recode(c("AI/AN" = 'Native American'))) %>%
+    mutate(agegrp_at_event = fct_recode(agegrp_at_event,
+                                        '<50' = '<40',
+                                        '<50' = '[40,50)')) %>% 
     select(time_from_event, cens_type, age_at_event, agegrp_at_event, Race, Age = age_cat, Sex = SEX, Region = REGION, zscore,
             comorb_indx,
            time_on_dialysis)
@@ -315,6 +318,7 @@ lbls <- c('Race' = 'Race', 'agegrp_at_event' = 'Age',  'Sex'  = 'Gender',
 
 bl <- munged_modeling[c('stroke_primary','LuCa','dement','thrive')]
 bl <- map(bl, ~mutate(., zscore = zscore/10)) # Rescale zscore to 10 units
+                  
 hosp_coxph_surv <- map(bl,
                        ~ coxph(Surv(time_from_event+0.1, cens_type %in% c(1,3))~Race + agegrp_at_event + Sex + zscore +
                                  Region + comorb_indx + time_on_dialysis, data = .) )
@@ -426,9 +430,13 @@ ggsave('graphs/Figure1.pdf', width = 6, height = 8)
 
 # Figure 2 ------------------------------------------------------------------------------------
 
+load(file.path(dropdir, 'munged_modeling.rda'))
+race_order <- c("White",'Black','Hispanic','Asian','AI/AN')
+
 cox_models <- readRDS(file.path(dropdir, 'cox_models.rds'))
+
 cox_models <- cox_models[names(events)]
-cox_models %>% modify_depth(2, ~select(., term, estimate) %>%
+bl <- cox_models %>% modify_depth(2, ~select(., term, estimate) %>%
                               mutate(term = str_remove(term, 'Race'),
                                      term = str_replace(term, 'Native American','AI/AN'),
                                      estimate = exp(estimate))) %>%
@@ -439,7 +447,8 @@ cox_models %>% modify_depth(2, ~select(., term, estimate) %>%
          Event = as.factor(Event)) %>%
   mutate(Race = fct_relevel(Race, race_order[-1]),
          Event = fct_relevel(Event, c('Stroke','Lung cancer','Dementia', 'Failure to thrive'))) %>%
-  select(-term) -> bl
+  select(-term) 
+
 
 # ggplot(bl, aes(x = estimate)) + geom_density() +
 #   facet_grid(Event ~ Race, scales = 'free', switch = 'y') +
@@ -454,14 +463,39 @@ cox_models %>% modify_depth(2, ~select(., term, estimate) %>%
 #         panel.spacing.x = unit(2, 'lines'))
 # ggsave('Figure2.pdf', width = 12, height = 7)
 
-ggplot(bl, aes(x = estimate)) + geom_density() +
+bl2 <- map(munged_modeling,
+           ~ coxph(Surv(time_from_event+0.1, cens_type %in% c(1,3))~Race + agegrp_at_event + Sex + zscore +
+                     Region + comorb_indx + time_on_dialysis, data = .) %>%
+             broom::tidy() %>%
+             filter(str_detect(term, 'Race')) %>%
+             select(term, estimate)) %>% 
+  bind_rows(.id = 'Event') %>% 
+  filter(Event %in% c('stroke_primary','LuCa', 'dement', 'thrive')) %>% 
+  mutate(estimate = exp(estimate),
+         term = str_remove(term, 'Race')) %>% 
+  mutate(Event = as.factor(Event),
+         Race = as.factor(term))  %>% 
+  mutate(Race = fct_relevel(Race, race_order[-1]),
+         Event = fct_recode(Event, 'Stroke'='stroke_primary','Lung cancer' = 'LuCa',
+                                      'Dementia' = 'dement', 'Failure to thrive' = 'thrive'),
+         Event = fct_relevel(Event, c('Stroke','Lung cancer','Dementia','Failure to thrive'))) %>%
+  select(-term) %>% 
+  mutate(hts = case_when(Event == 'Stroke' ~ 600, Event == 'Lung cancer' ~ 200, Event == 'Dementia' ~ 500, Event == 'Failure to thrive' ~ 600)) %>% 
+  mutate(hts = hts / 4)
+
+ggplot(bl, aes(x = estimate)) + geom_histogram(bins = 50)+#geom_density() +
   facet_grid(Event ~ Race, scales = 'free', switch = 'y', space = 'free_x') +
   geom_vline(xintercept = 1, linetype = 2) +
+  #geom_point(data = bl2, aes(x = estimate, y = 1), color='red', size = 4)+
+  # geom_segment()
+  #geom_vline(data = bl2, aes(xintercept = estimate), linetype = 2, color='red') +
+  geom_segment(data = bl2, aes(x = estimate, xend=estimate, yend = 5, y = hts),
+               color='red', size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
   scale_x_continuous(breaks = c(1, seq(0.7, 1.8, by = 0.2)))+ # Unified the x-axis ticks
   labs(x = 'Adjusted HR, compared to Whites', y = '') +
   theme(strip.text = element_text(size = 14, face = 'bold'),
         strip.text.y = element_text(angle = 180), # Rotate the y-axis labels
-        strip.background = element_rect(fill = 'white'),
+        strip.background.x = element_rect(fill = 'white'),
         strip.placement = 'outside', # Move labels outside the borders
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
