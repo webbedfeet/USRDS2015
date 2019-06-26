@@ -6,6 +6,7 @@
 library(pdftools)
 library(fs)
 library(tidyverse)
+library(tableone)
 drop_dir <- path(ProjTemplate::find_dropbox(), 'NIAMS','Ward','USRDS2015')
 
 ## Grab the Research Guide files
@@ -44,39 +45,39 @@ for(n in names(out)){
 sink()
 
 
-pdis_codes = Reduce(c, dat)
-pdis_codes <- pdis_codes %>% str_trim() %>% str_split_fixed('[ ]+', 2) %>% 
-  as.data.frame(stringsAsFactors = F) %>% set_names(c('Code','Description')) %>% 
-  mutate(Description = str_to_lower(Description)) %>% 
-  mutate(Code_stripped = str_remove(Code, '[A-Za-z]+'))
+# pdis_codes = Reduce(c, dat)
+# pdis_codes <- pdis_codes %>% str_trim() %>% str_split_fixed('[ ]+', 2) %>% 
+#   as.data.frame(stringsAsFactors = F) %>% set_names(c('Code','Description')) %>% 
+#   mutate(Description = str_to_lower(Description)) %>% 
+#   mutate(Code_stripped = str_remove(Code, '[A-Za-z]+'))
 
-analytic <- readRDS('data/rda/Analytic.rds')
-analytic$PDIS <- str_remove(analytic$PDIS,'[A-Za-z]+')
+# analytic <- readRDS(path(drop_dir, 'data/Analytic.rds'))
+# analytic$PDIS <- str_remove(analytic$PDIS,'[A-Za-z]+')
+# 
+# codes <- list(
+# 'diabetes' =  filter(pdis_codes,str_detect(Description,'diabetes')),
+# 'hypertension' = filter(pdis_codes,str_detect(Description,'hypertension')),
+# 'gn' = filter(pdis_codes,str_detect(Description,'\\bgn\\b|glumerolunephritis'))
+# ) 
+# 
+# codes %>% 
+#   map(~select(., Code, Description)) %>% 
+#   openxlsx::write.xlsx(.,'PDIS_codes.xlsx')
+# 
 
-codes <- list(
-'diabetes' =  filter(pdis_codes,str_detect(Description,'diabetes')),
-'hypertension' = filter(pdis_codes,str_detect(Description,'hypertension')),
-'gn' = filter(pdis_codes,str_detect(Description,'\\bgn\\b|glumerolunephritis'))
-) 
-
-codes %>% 
-  map(~select(., Code, Description)) %>% 
-  openxlsx::write.xlsx(.,'PDIS_codes.xlsx')
-
-
-analytic_pdis <- left_join(analytic, pdis_codes, by = c('PDIS' = 'Code_stripped'))
-analytic_pdis %<>% 
-  mutate(cause_esrd = case_when(PDIS %in% codes$hypertension$Code_stripped~'hypertension',
-                                PDIS %in% codes$diabetes$Code_stripped~ 'diabetes',
-                                PDIS %in% codes$gn$Code_stripped ~ 'gn',
-                                TRUE ~ 'other'))
-
-library(tableone)
-CreateCatTable(vars = c('Outcomes','Cause of ESRD'), data = tmp) %>% 
-  kableone(format = 'markdown')
-
-
-
+# analytic_pdis <- left_join(analytic, pdis_codes, by = c('PDIS' = 'Code_stripped'))
+# analytic_pdis %<>% 
+#   mutate(cause_esrd = case_when(PDIS %in% codes$hypertension$Code_stripped~'hypertension',
+#                                 PDIS %in% codes$diabetes$Code_stripped~ 'diabetes',
+#                                 PDIS %in% codes$gn$Code_stripped ~ 'gn',
+#                                 TRUE ~ 'other'))
+# 
+# library(tableone)
+# CreateCatTable(vars = c('Outcomes','Cause of ESRD'), data = tmp) %>% 
+#   kableone(format = 'markdown')
+# 
+# 
+# 
 ids = readRDS('data/hospitalization_ids.rds')
 
 hospitalization_data <- ids %>% map(~analytic %>% filter(USRDS_ID %in% .))
