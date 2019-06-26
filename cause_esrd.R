@@ -7,6 +7,7 @@ library(pdftools)
 library(fs)
 library(tidyverse)
 library(tableone)
+source('extract_fmt.R')
 drop_dir <- path(ProjTemplate::find_dropbox(), 'NIAMS','Ward','USRDS2015')
 
 ## Grab the Research Guide files
@@ -31,8 +32,8 @@ disgrpc_code <- filter(data_formats, Variable == 'DISGRPC') %>%
   select(Format, Description)
 hosp_data <- hosp_data %>% 
   map( ~left_join(., disgrpc_code, by=c('DISGRPC'='Format'))) %>% 
-  map(~mutate(., Description = fct_other(Description,keep=c('Diabetes','Hypertension','Glomeruloneph.')))) %>% 
-  map(~mutate(., Description = ifelse(DISGRPC %in% c('**OTHER**','8'), NA, Description)))
+  map(~mutate(., Description = ifelse(DISGRPC %in% c("**OTHER**", "8"), NA, Description))) %>% 
+  map(~mutate(., Description = fct_other(Description,keep=c('Diabetes','Hypertension','Glomeruloneph.')))) 
 
 out <- hosp_data %>% map(~kableone(CreateCatTable('Description', data = .)))
 
