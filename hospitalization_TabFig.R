@@ -483,15 +483,16 @@ bl2 <- map(munged_modeling,
   mutate(hts = case_when(Event == 'Stroke' ~ 600, Event == 'Lung cancer' ~ 200, Event == 'Dementia' ~ 500, Event == 'Failure to thrive' ~ 600)) %>% 
   mutate(hts = hts / 4)
 
-ggplot(bl, aes(x = estimate)) + geom_histogram(bins = 50)+#geom_density() +
-  facet_grid(Event ~ Race, scales = 'free', switch = 'y', space = 'free_x') +
+ggplot(rbind(bl, data.frame('Event'='Lung cancer', 'estimate' = 1.2, 'Race'='Asian')), aes(x = estimate)) + 
+  geom_histogram(bins = 50, fill = 'black')+#geom_density() +
+  facet_grid(Event ~ Race, scales = 'free', switch = 'y', space = 'free_x')+
   geom_vline(xintercept = 1, linetype = 2) +
   #geom_point(data = bl2, aes(x = estimate, y = 1), color='red', size = 4)+
   # geom_segment()
   #geom_vline(data = bl2, aes(xintercept = estimate), linetype = 2, color='red') +
   geom_segment(data = bl2, aes(x = estimate, xend=estimate, yend = 5, y = hts),
-               color='red', size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
-  scale_x_continuous(breaks = c(1, seq(0.7, 1.8, by = 0.2)))+ # Unified the x-axis ticks
+               color = 'grey50', size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
+  scale_x_continuous(breaks = c(1, seq(0.4, 1.6, by = 0.2)))+ # Unified the x-axis ticks
   labs(x = 'Adjusted HR, compared to Whites', y = '') +
   theme(strip.text = element_text(size = 14, face = 'bold'),
         strip.text.y = element_text(angle = 180), # Rotate the y-axis labels
