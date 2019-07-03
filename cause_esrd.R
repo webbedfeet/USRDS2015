@@ -26,7 +26,8 @@ data_formats <- map(txt2[-(1:2)], extract_fmt) %>%
 ## Create hospitalization datasets
 
 hospitalization <- readRDS(path(drop_dir,'data/hospitalization_ids.rds'))
-raw <- readRDS(path(drop_dir, 'data/rawdata.rds'))
+# raw <- readRDS(path(drop_dir, 'data/rawdata.rds'))
+raw <- fst::read_fst(path(drop_dir,'data','raw_data.fst'))
 hosp_data <- map(hospitalization, ~left_join(., raw))
 disgrpc_code <- filter(data_formats, Variable == 'DISGRPC') %>% 
   select(Format, Description)
