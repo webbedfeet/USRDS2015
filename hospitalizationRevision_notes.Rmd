@@ -1,0 +1,75 @@
+---
+title: "Revision of hospitalization and discontinuation paper"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include = F}
+suppressPackageStartupMessages(library(tidyverse))
+library(data.table)
+library(fs)
+library(glue)
+condition_names <- c('stroke_primary' = 'Primary stroke',
+                     'stroke_compl' = 'Complicated stroke',
+                     'LuCa' = 'Lung cancer',
+                     'MetsCa' = 'Metastatic cancer',
+                     'dement' = 'Dementia',
+                     'thrive' = 'Failure to thrive')
+```
+
+
+## Source files
+
+- hospital_comorb.R
+- hospitalization.R
+- cause_esrd.R
+- hospitalization_TabFig.R
+
+## Required revisions
+
+1. Specification of comorbidity index and inclusion of cause of ESRD
+1. Rates of transplant in each of the cohorts
+1. Test the inclusion of cause of ESRD in all the analyses, starting with stroke, and
+   see if there are any differences
+1. Potential pitfalls of the simulation model, and model fit
+1. Better specification of the simulation model
+1. Sensitivity analysis ignoring transplantation
+
+# Analyses addressing each revision point
+
+## Specification of comorbidity index and inclusion of cause of ESRD
+
+The comorbidity score is based on Liu, et al (2010) and is computed as
+
+```
+comorb_indx = ASHD + 3 * CHF + 
+  2 * (CVATIA + PVD + Other.cardiac + COPD + GI.Bleeding + Liver + 
+       Dysrhhythmia + Cancer) +
+  Diabetes
+```
+
+## Rates of transplant
+
+```{r}
+drop_dir <- path(ProjTemplate::find_dropbox(),'NIAMS','Ward','USRDS2015')
+hosp_data <- readRDS(path(drop_dir, 'data','final_hosp_data.rds'))
+map(hosp_data, 
+    ~summarize(., Total = sum(cens_type==2), Percentage = 100*mean(cens_type==2))) %>% 
+  bind_rows(.id = 'Condition') %>% 
+  mutate(Condition = condition_names[Condition],
+         Percentage = round(Percentage, 1)) %>% 
+  knitr::kable()
+```
+
+## Test the inclusion of cause of ESRD in all the analyses, starting with stroke, and see if there are any differences
+
+
+
+## Potential pitfalls of the simulation model, and model fit
+
+
+## Better specification of the simulation model
+
+
+## Sensitivity analysis ignoring transplantation
