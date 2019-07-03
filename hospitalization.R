@@ -186,8 +186,9 @@ dbDisconnect(sql_conn); gc()
 
 ProjTemplate::reload()
 hospitalization <- readRDS('data/hospitalization_ids.rds')
-Dat <- readRDS('data/rda/Analytic.rds')
-Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>%
+Dat <- readRDS(path(dropdir,'Analytic.rds'))
+Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, 
+                                       TX1DATE, na.rm=T)) %>%
   mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
 
 hosp_post_dx <-
