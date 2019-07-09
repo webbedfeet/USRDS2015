@@ -213,11 +213,12 @@ saveRDS(hosp_post_dx, 'data/rda/final_hosp_data.rds', compress = T)
 saveRDS(hosp_post_dx, file.path(dropdir, 'final_hosp_data.rds'), compress = T)
 
 
-# Propensity of withdrawal based on timing of Comorb ------------------------------------------
+
+# Adding the age at the index condition -----------------------------------
 
 #' what's the chance of discontinuation, by race
 hosp_post_dx <- readRDS(file.path(dropdir,'final_hosp_data.rds'))
-Dat <- readRDS('data/rda/Analytic.rds')
+Dat <- fst::read_fst(path(dropdir, 'Analytic.fst'))
 Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>%
   mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
 
@@ -245,7 +246,7 @@ hosp_postdx_age <- readRDS(file.path(dropdir, 'hosp_postdx_age.rds'))
 
 hosp_cox_data <-
   map(hosp_postdx_age, ~.x %>%
-        left_join(select(Dat,  SEX, zscore, USRDS_ID, REGION)) %>%
+        left_join(select(Dat,  SEX, zscore, USRDS_ID, REGION)) %>% 
         mutate(time_from_event = as.numeric(surv_date-CLM_FROM)) %>%
         mutate(time_on_dialysis = se_to_event_time) %>%
         rename('Race' = "RACE2") %>%
@@ -255,17 +256,17 @@ hosp_cox_data <-
 out <- list()
 for (n in names(hosp_post_dx)){
   print(paste('Working on ', n))
-  d <- index_condn_comorbs[[n]] %>% select(USRDS_ID:CLM_THRU, comorb_indx)
+  d <- index_condn_comorbs[[n]] %>% select(USRDS_ID:CLM_THRU, comorb_indx) # Comorbidities per indiv per visit
   hosp_post_dx[[n]] %>% mutate(CLM_FROM = as.character(CLM_FROM),
                                CLM_THRU = as.character(CLM_THRU)) %>%
     left_join(d) %>%
     group_by(USRDS_ID) %>%
-    filter(comorb_indx == max(comorb_indx)) %>%
+    filter(comorb_indx == max(comorb_indx)) %>% # Take worst comorbidity index
     ungroup() %>%
     distinct() -> out[[n]]
 }
 assertthat::are_equal(map_int(hosp_post_dx, nrow), map_int(out, nrow))
-hosp_post_dx <- out
+# hosp_post_dx <- out
 
 modeling_data <- hosp_cox_data
 for(n in names(modeling_data)){
@@ -274,14 +275,14 @@ for(n in names(modeling_data)){
 
 ## Data munging to add simulated withdrawal times
 
-Dat <- readRDS('data/rda/Analytic.rds')
+Dat <- readRDS(path(dropdir, 'Analytic.rds'))
 modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, toc:tow), by ='USRDS_ID') %>%
                         mutate_at(vars(toc:tow), funs(.*365.25)) %>% # Change to days
                         mutate(time_on_dialysis = as.numeric(time_on_dialysis),
                                REGION = as.factor(REGION),
                                agegrp_at_event = fct_collapse(agegrp_at_event,
                                                               '<50' = c('<40','[40,50)'))) %>% 
-                        split(.$Race)) # convert times to days
+                        split(.,.$Race)) # convert times to days
 
 save(modeling_data, modeling_data2, file = file.path(dropdir,'modeling_data.rda'), compress = T)
 
