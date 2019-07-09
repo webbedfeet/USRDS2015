@@ -29,7 +29,7 @@ sql_conn = dbConnect(SQLite(), file.path(dbdir,'USRDS.sqlite3'))
 
 till2009 <- tbl(sql_conn, 'till2009')
 from2010 <- tbl(sql_conn, 'from2010')
-studyids <- tbl(sql_conn, 'StudyIDs')
+studyids <- tbl(sql_conn, 'StudyIDs') # These are people in the final analytic dataset,  N= 1,291,001
 dbs <- list(till2009, from2010)
 
 # Stroke ------------------------------------------------------------------
@@ -137,7 +137,7 @@ for (sql in sqlist){
 }
 
 dement1 <- bind_rows(dement)
-dement1 <- dement1 %>% semi_join(StudyIDS)
+dement1 <- dement1 %>% semi_join(StudyIDS) # Keep people from analytic dataset
 
 hospitalization[['dement']] <- dement1
 saveRDS(hospitalization, file = 'data/hospitalization_ids.rds', compress = T)
@@ -169,7 +169,7 @@ for (sql in sqlist) {
   dbClearResult(rs)
 }
 
-thrive1 <- bind_rows(thrive) %>% semi_join(StudyIDS)
+thrive1 <- bind_rows(thrive) %>% semi_join(StudyIDS) # Keep people from analytic dataset
 hospitalization[['thrive']] <- thrive1
 
 
@@ -184,20 +184,26 @@ dbDisconnect(sql_conn); gc()
 # IDEA: We could also look at individuals who had index condition soon followed by dialysis,
 # where dialysis is the precipitating index condition
 
-ProjTemplate::reload()
+abhiR::reload()
 hospitalization <- readRDS('data/hospitalization_ids.rds')
-Dat <- readRDS(path(dropdir,'Analytic.rds'))
+# Dat <- readRDS(path(dropdir,'Analytic.rds'))
+Dat <- read_fst(path(dropdir,'Analytic.fst'))
+
+# The following code computes survival date as the minimum of loss-to-followup,
+# discontinuation time, death and transplant date
 Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, 
                                        TX1DATE, na.rm=T)) %>%
   mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
+disgrpc <- fst(path(dropdir, 'raw_data.fst'))[,c('USRDS_ID','DISGRPC')]
+Dat <- Dat %>% left_join(disgrpc) # Adding reason for dialysis
 
 hosp_post_dx <-
   map(hospitalization, ~ .x %>%
         mutate(CLM_FROM = as.Date(CLM_FROM)) %>%
-        left_join(Dat %>% select(USRDS_ID, FIRST_SE, surv_date, cens_type, RACE2)) %>%
+        left_join(Dat %>% select(USRDS_ID, FIRST_SE, surv_date, cens_type, RACE2, DISGRPC)) %>% # Add cause of dialysis
         filter(CLM_FROM >= FIRST_SE, CLM_FROM <= surv_date) %>%
         group_by(USRDS_ID) %>%
-        top_n(-1, CLM_FROM) %>%
+        top_n(-1, CLM_FROM) %>% # Selects last hospital stay for each person
         top_n(-1, CLM_THRU) %>%
         # select(-FIRST_SE, -surv_date) %>%
         distinct() %>%
