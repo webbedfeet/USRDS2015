@@ -10,7 +10,7 @@
 abhiR::reload()
 # dbdir = verifyPaths(); dir.exists(dbdir)
 dropdir <- file.path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
-load(path(dropdir, 'modeling_data.rda'))
+load(path(dropdir,'revision_JASN', 'modeling_data.rda'))
 
 ## Munge modeling data once here for all the tables
 
@@ -44,7 +44,7 @@ events <- c('stroke_primary' = 'Stroke',
             'thrive' = 'Failure to thrive')
 
 munged_modeling <- map(modeling_data, munge_data)
-save(munged_modeling, file = path(dropdir, 'munged_modeling.rda'), compress = T)
+save(munged_modeling, file = path(dropdir, 'revision_JASN', 'munged_modeling.rda'), compress = T)
 
 # Table 1 -------------------------------------------------------------------------------------
 
@@ -146,7 +146,7 @@ hosp_coxph_surv <- map(munged_modeling,
                     mutate(res = as.character(glue("{round(estimate,2)} ({round(conf.low, 2)}, {round(conf.high,2)})"))) %>%
                     select(term, res) %>%
                     rbind(data.frame(term = "White", res = "1.00 (ref)")) %>%
-                    rename(aHR_surv = res))
+                    rename(aHR_mort = res))
 
 res_survival <- map2(out_crude_surv, hosp_coxph_surv, left_join)[c('stroke_primary','LuCa','dement','thrive')]
 
@@ -237,7 +237,7 @@ hosp_surv_coxph_old <- map(munged_modeling_old,
 
 # Simulation study
 
-load(file.path(dropdir, 'cox_models_sim_strat.rda'))
+load(file.path(dropdir, 'revision_JASN', 'cox_models_sim_strat.rda')) # hospitalization_cause.R
 bl_young <- modify_depth(cox_models_young, 2, ~select(., term, estimate) %>%
                            mutate(estimate = exp(estimate))) %>%
   map(~bind_rows(.) %>%
@@ -305,7 +305,7 @@ tbl3 <- res_young %>% left_join(res_old, by = c("Event", 'Race')) %>%
 
 # Supplementary Table 1 -----------------------------------------------------------------------
 
-load(file.path(dropdir, 'munged_modeling.rda'))
+load(file.path(dropdir, 'revision_JASN', 'munged_modeling.rda'))
 race_order <- c("White",'Black','Hispanic','Asian','AI/AN')
 events <- c('stroke_primary' = 'Stroke',
             'LuCa' = "Lung cancer",
@@ -321,7 +321,7 @@ bl <- map(bl, ~mutate(., zscore = zscore/10)) # Rescale zscore to 10 units
                   
 hosp_coxph_surv <- map(bl,
                        ~ coxph(Surv(time_from_event+0.1, cens_type %in% c(1,3))~Race + agegrp_at_event + Sex + zscore +
-                                 Region + comorb_indx + time_on_dialysis, data = .) )
+                                 Region + comorb_indx + time_on_dialysis + ESRD_Cause, data = .) )
 
 res <-  map(hosp_coxph_surv, table_results.coxph, lbls = lbls,tidy = F, dig = 3)
 for (nm in names(res)) {
@@ -333,7 +333,7 @@ results <- Reduce(left_join, res) %>%
 ## Adding full model for discontinuation
 hosp_coxph_disc <- map(bl,
                   ~ coxph(Surv(time_from_event+0.1, cens_type==3)~Race + agegrp_at_event + Sex + zscore +
-                            Region + comorb_indx + time_on_dialysis, data = .)) 
+                            Region + comorb_indx + time_on_dialysis + ESRD_Cause, data = .)) 
 res_disc <- map(hosp_coxph_disc, table_results.coxph, lbls=lbls, tidy=F, dig = 3)
 for (nm in names(res_disc)){
   res_disc[[nm]] <- res_disc[[nm]] %>% set_names(c('Variable',events[nm]))
@@ -344,7 +344,7 @@ res_disc <- Reduce(left_join, res_disc) %>% mutate(Variable = format_interval(Va
 openxlsx::write.xlsx(list('Table 1'= tab1, 'Table 2' = tbl2, 'Table 3' = tbl3,
                           'Supplementary Table 1' = results,
                           'Supplementary Table 1a' = res_disc),
-                     file = 'Tables.xlsx',
+                     file = 'results/revision_JASN/Tables.xlsx',
                      colWidths = 'auto',
                      creator = "Abhijit Dasgupta")
 
@@ -352,7 +352,7 @@ openxlsx::write.xlsx(list('Table 1'= tab1, 'Table 2' = tbl2, 'Table 3' = tbl3,
 
 library(survival)
 library(survminer)
-load(file.path(dropdir, 'munged_modeling.rda'))
+load(file.path(dropdir,'revision_JASN', 'munged_modeling.rda'))
 
 d <- bind_rows(munged_modeling, .id = 'Event') %>%
   mutate(Event = events[Event]) %>%
@@ -426,14 +426,14 @@ plt1 <- plot_grid(plt_disc_complete, plt_surv_complete, nrow=1, rel_widths = c(0
 plt <- plt1 %>% 
   plot_grid(bottom, ncol = 1, rel_heights = c(1,0.05)) %>%
   plot_grid(legend_b, ncol = 1, rel_heights = c(1, 0.1))
-ggsave('graphs/Figure1.pdf', width = 6, height = 8)
+ggsave('graphs/revision_JASN/Figure1.pdf', width = 6, height = 8)
 
 # Figure 2 ------------------------------------------------------------------------------------
 
-load(file.path(dropdir, 'munged_modeling.rda'))
+load(file.path(dropdir, 'revision_JASN', 'munged_modeling.rda'))
 race_order <- c("White",'Black','Hispanic','Asian','AI/AN')
 
-cox_models <- readRDS(file.path(dropdir, 'cox_models.rds'))
+cox_models <- readRDS(file.path(dropdir, 'revision_JASN', 'cox_models.rds'))
 
 cox_models <- cox_models[names(events)]
 bl <- cox_models %>% modify_depth(2, ~select(., term, estimate) %>%
@@ -502,7 +502,7 @@ ggplot(rbind(bl, data.frame('Event'='Lung cancer', 'estimate' = 1.2, 'Race'='Asi
         axis.ticks.y = element_blank(),
         axis.text.x = element_text(size = 8),
         panel.spacing.x = unit(2, 'lines'))
-ggsave('graphs/Figure2a.pdf', width = 12, height = 7)
+ggsave('graphs/revision_JASN/Figure2a.pdf', width = 12, height = 7)
 
 
 
