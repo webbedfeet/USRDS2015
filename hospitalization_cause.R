@@ -185,10 +185,8 @@ no_cores <- detectCores()-1
 # 
 ######################################################################
 
-
-
 abhiR::reload()
-hospitalization <- readRDS('data/hospitalization_ids.rds')
+hospitalization <- readRDS(path(dropdir, 'hospitalization_ids.rds'))
 # Dat <- readRDS(path(dropdir,'Analytic.rds'))
 Dat <- read_fst(path(dropdir,'Analytic.fst'))
 
@@ -209,7 +207,7 @@ disgrpc <- fst(path(dropdir, 'raw_data.fst'))[,c('USRDS_ID','DISGRPC')] %>%
   mutate(Description = fct_other(Description,keep=c('Diabetes','Hypertension','Glomeruloneph.'))) %>% 
   rename(ESRD_Cause = Description)
 Dat <- Dat %>% left_join(disgrpc) # Adding reason for dialysis
-fst::write_fst(Dat, path(dropdir,'Analytic_DISGRPC.fst'))
+fst::write_fst(Dat, path(dropdir,'revision_JASN','Analytic_DISGRPC.fst'))
 
 
 # Filter index conditions by events after start of dialysis -----------------------------------
@@ -230,15 +228,15 @@ hosp_post_dx <-
         ungroup())
 
 # saveRDS(hosp_post_dx, 'data/rda/final_hosp_data.rds', compress = T)
-saveRDS(hosp_post_dx, file.path(dropdir, 'final_hosp_data.rds'), compress = T)
+saveRDS(hosp_post_dx, file.path(dropdir, 'revision_JASN','final_hosp_data.rds'), compress = T)
 
 
 
 # Adding the age at the index condition -----------------------------------
 
 #' what's the chance of discontinuation, by race
-hosp_post_dx <- readRDS(file.path(dropdir,'final_hosp_data.rds'))
-Dat <- fst::read_fst(path(dropdir, 'Analytic_DISGRPC.fst'))
+hosp_post_dx <- readRDS(file.path(dropdir,'revision_JASN','final_hosp_data.rds'))
+Dat <- fst::read_fst(path(dropdir, 'revision_JASN','Analytic_DISGRPC.fst'))
 # Dat <- fst::read_fst(path(dropdir, 'Analytic.fst'))
 # Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>%
 #   mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
@@ -256,14 +254,14 @@ hosp_postdx_age <- map(
                                                      c('[80,90)','[90,100)','[90,100]','[100,110]')))))
 
 
-saveRDS(hosp_postdx_age, file.path(dropdir,'hosp_postdx_age.rds'), compress = T)
+saveRDS(hosp_postdx_age, file.path(dropdir,'revision_JASN','hosp_postdx_age.rds'), compress = T)
 
 # Cox regressions: Data munging -----------------------------------------------------------------------------
 # Data munging and generation: Matching comorbidity score with time of index condition -------------------------------------
 
 index_condn_comorbs <- readRDS(file.path(dropdir, 'index_condn_comorbs.rds'))
-hosp_post_dx <- readRDS(file.path(dropdir, 'final_hosp_data.rds'))
-hosp_postdx_age <- readRDS(file.path(dropdir, 'hosp_postdx_age.rds'))
+hosp_post_dx <- readRDS(file.path(dropdir, 'revision_JASN', 'final_hosp_data.rds'))
+hosp_postdx_age <- readRDS(file.path(dropdir, 'revision_JASN','hosp_postdx_age.rds'))
 
 hosp_cox_data <-
   map(hosp_postdx_age, ~.x %>%
@@ -296,7 +294,7 @@ for(n in names(modeling_data)){
 
 ## Data munging to add simulated withdrawal times
 
-Dat <- fst::read_fst(path(dropdir, 'Analytic_DISGRPC.fst'))
+Dat <- fst::read_fst(path(dropdir, 'revision_JASN','Analytic_DISGRPC.fst'))
 modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, toc:tow), by ='USRDS_ID') %>%
                         mutate_at(vars(toc:tow), funs(.*365.25)) %>% # Change to days
                         mutate(time_on_dialysis = as.numeric(time_on_dialysis),
@@ -305,7 +303,7 @@ modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, toc:tow
                                                               '<50' = c('<40','[40,50)'))) %>% 
                         split(.,.$Race)) # convert times to days
 
-save(modeling_data, modeling_data2, file = file.path(dropdir,'modeling_data.rda'), compress = T)
+save(modeling_data, modeling_data2, file = file.path(dropdir,'revision_JASN','modeling_data.rda'), compress = T)
 
 
 # TODO: Figure out which analysis makes the most sense
@@ -316,7 +314,7 @@ save(modeling_data, modeling_data2, file = file.path(dropdir,'modeling_data.rda'
 
 
 # What is the chance of discontinuation, by age and race --------------------------------------
-hosp_postdx_age <- readRDS(file.path(dropdir,'hosp_postdx_age.rds'))
+hosp_postdx_age <- readRDS(file.path(dropdir,'revision_JASN','hosp_postdx_age.rds'))
 out1 <- map(hosp_postdx_age, ~.x %>%
               group_by(agegrp_at_event, RACE2) %>%
               summarize(prop_withdrew = round(mean(cens_type==3), 3), N = n()) %>%
@@ -328,7 +326,7 @@ out1 <- map(hosp_postdx_age, ~.x %>%
   mutate(index_event = transform_indx(index_event)) %>%
   rename(`Index event`=index_event, Race=RACE2)
 
-hosp_post_dx <- readRDS(file.path(dropdir, 'final_hosp_data.rds'))
+hosp_post_dx <- readRDS(file.path(dropdir, 'revision_JASN', 'final_hosp_data.rds'))
 out2 <- map(hosp_post_dx, ~.x %>% group_by(RACE2) %>% summarise(prop_withdrew = mean(cens_type==3),
                                                                 N = n())) %>%
   bind_rows(.id='index_condition') %>%
@@ -342,8 +340,8 @@ openxlsx::write.xlsx(out, file='Withdrawal_age_race.xlsx')
 
 # Median time after index condition to discontinuation ----------------------------------------
 
-hosp_postdx_age <- readRDS(file.path(dropdir, 'hosp_postdx_age.rds'))
-map(hosp_postdx_age, ~.x %>%
+hosp_postdx_age <- readRDS(file.path(dropdir, 'revision_JASN', 'hosp_postdx_age.rds'))
+map(hosp_postdx_age, ~.x %>% 
       mutate(time_to_wd = as.numeric(surv_date - CLM_FROM)) %>% # time between dialysis and withdrawal
       group_by(agegrp_at_event, RACE2) %>%
       summarise(median_time = median(time_to_wd, na.rm=T))) %>%
@@ -357,7 +355,7 @@ map(hosp_postdx_age, ~.x %>%
 
 # Survival analysis on discontinuation --------------------------------------------------------
 
-load(file.path(dropdir, 'modeling_data.rda'))
+load(file.path(dropdir, 'revision_JASN', 'modeling_data.rda'))
 
 ## Kaplan Meier curves
 
@@ -367,6 +365,9 @@ cph1_list <-  map(modeling_data, ~ coxph(Surv(time_from_event, cens_type==3)~ Ra
                                          data = .))
 logrank_list <- map(cph1_list, ~format.pval(anova(.)[2,4], eps=1e-6))
 plt_list <- vector('list',6)
+
+# FIXME: Need to replace with survminer::ggsurvplot. There is a bug in the current
+# version of survMisc::autoplot
 for(i in 1:6){
   plt_list[[i]] <- survMisc::autoplot(fit_list[[i]], type='single', censSize = 0,
                                       title = names(fit_list)[i],
@@ -384,7 +385,7 @@ dev.off()
 #'  Cox regressions adjusting for age at event, gender, race, z-score, region, comorbidities and time on dialysis at time of event
 hosp_coxph <- map(modeling_data,
                   ~ coxph(Surv(time_from_event+0.1, cens_type==3)~Race + agegrp_at_event + SEX + zscore +
-                            REGION + comorb_indx + time_on_dialysis, data = .) %>%
+                            REGION + comorb_indx + time_on_dialysis + ESRD_Cause, data = .) %>%
                     broom::tidy() %>%
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
@@ -424,8 +425,8 @@ bind_rows(hosp_coxph, .id = 'Index event') %>%
 # Evaluating how long from discontinuation to death -------------------------------------------
 
 ProjTemplate::reload()
-hospitalization <- readRDS('data/hospitalization_ids.rds')
-Dat <- readRDS('data/rda/Analytic.rds')
+hospitalization <- readRDS(path(dropdir, 'hospitalization_ids.rds'))
+Dat <- read_fst(path(dropdir, 'revision_JASN','Analytic_DISGRPC.fst'))
 Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>%
   mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
 
@@ -456,13 +457,14 @@ Dat %>% filter(RACE2 != 'Other', cens_type == 3) %>%
 
 
 # Simulation study ----------------------------------------------------------------------------
-load(file.path(dropdir, 'modeling_data.rda'))
+load(file.path(dropdir, 'revision_JASN', 'modeling_data.rda'))
 
 cl <- makeCluster(no_cores)
 registerDoParallel(cl)
 
+# TODO: Create a sim_fn including ESRD_Cause
 cox_models <- sim_fn(modeling_data2)
-saveRDS(cox_models, file.path(dropdir, 'cox_models.rds'), compress = T)
+saveRDS(cox_models, file.path(dropdir, 'revision_JASN', 'cox_models.rds'), compress = T)
 
 bl <- modify_depth(cox_models, 2, ~select(., term, estimate) %>%
                      mutate(estimate = exp(estimate))) %>%
