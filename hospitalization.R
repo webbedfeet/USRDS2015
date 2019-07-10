@@ -178,11 +178,12 @@ saveRDS(hospitalization, file = file.path(dropdir, 'hospitalization_ids.rds'))
 
 dbDisconnect(sql_conn); gc()
 
+######################################################################
+# End of database extraction
+# 
+######################################################################
 
 
-# Filter index conditions by events after start of dialysis -----------------------------------
-# IDEA: We could also look at individuals who had index condition soon followed by dialysis,
-# where dialysis is the precipitating index condition
 
 abhiR::reload()
 hospitalization <- readRDS('data/hospitalization_ids.rds')
@@ -194,13 +195,30 @@ Dat <- read_fst(path(dropdir,'Analytic.fst'))
 Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, 
                                        TX1DATE, na.rm=T)) %>%
   mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
-disgrpc <- fst(path(dropdir, 'raw_data.fst'))[,c('USRDS_ID','DISGRPC')]
+
+
+# Adding DISGRPC codes to analytic data --------------------------------------------
+
+disgrpc_code <- readRDS(path(dropdir, 'disgrpc_code.rds')) # See cause_esrd.R
+disgrpc <- fst(path(dropdir, 'raw_data.fst'))[,c('USRDS_ID','DISGRPC')] %>% 
+  distinct() %>% 
+  left_join(disgrpc_code, by=c('DISGRPC'='Format')) %>% 
+  mutate(Description = ifelse(Description %in% c('8','**OTHER**'), NA, Description)) %>% 
+  mutate(Description = fct_other(Description,keep=c('Diabetes','Hypertension','Glomeruloneph.'))) %>% 
+  rename(ESRD_Cause = Description)
 Dat <- Dat %>% left_join(disgrpc) # Adding reason for dialysis
+fst::write_fst(Dat, path(dropdir,'Analytic_DISGRPC.fst'))
+
+
+# Filter index conditions by events after start of dialysis -----------------------------------
+# IDEA: We could also look at individuals who had index condition soon followed by dialysis,
+# where dialysis is the precipitating index condition
 
 hosp_post_dx <-
   map(hospitalization, ~ .x %>%
         mutate(CLM_FROM = as.Date(CLM_FROM)) %>%
-        left_join(Dat %>% select(USRDS_ID, FIRST_SE, surv_date, cens_type, RACE2, DISGRPC)) %>% # Add cause of dialysis
+        left_join(Dat %>% select(USRDS_ID, FIRST_SE, surv_date, cens_type, 
+                                 RACE2, DISGRPC, ESRD_Cause)) %>% # Add cause of dialysis
         filter(CLM_FROM >= FIRST_SE, CLM_FROM <= surv_date) %>%
         group_by(USRDS_ID) %>%
         top_n(-1, CLM_FROM) %>% # Selects last hospital stay for each person
@@ -209,7 +227,7 @@ hosp_post_dx <-
         distinct() %>%
         ungroup())
 
-saveRDS(hosp_post_dx, 'data/rda/final_hosp_data.rds', compress = T)
+# saveRDS(hosp_post_dx, 'data/rda/final_hosp_data.rds', compress = T)
 saveRDS(hosp_post_dx, file.path(dropdir, 'final_hosp_data.rds'), compress = T)
 
 
@@ -218,9 +236,10 @@ saveRDS(hosp_post_dx, file.path(dropdir, 'final_hosp_data.rds'), compress = T)
 
 #' what's the chance of discontinuation, by race
 hosp_post_dx <- readRDS(file.path(dropdir,'final_hosp_data.rds'))
-Dat <- fst::read_fst(path(dropdir, 'Analytic.fst'))
-Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>%
-  mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
+Dat <- fst::read_fst(path(dropdir, 'Analytic_DISGRPC.fst'))
+# Dat <- fst::read_fst(path(dropdir, 'Analytic.fst'))
+# Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>%
+#   mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
 
 hosp_postdx_age <- map(
   hosp_post_dx,
@@ -275,7 +294,7 @@ for(n in names(modeling_data)){
 
 ## Data munging to add simulated withdrawal times
 
-Dat <- readRDS(path(dropdir, 'Analytic.rds'))
+Dat <- fst::read_fst(path(dropdir, 'Analytic_DISGRPC.fst'))
 modeling_data2 <- map(modeling_data, ~left_join(., select(Dat, USRDS_ID, toc:tow), by ='USRDS_ID') %>%
                         mutate_at(vars(toc:tow), funs(.*365.25)) %>% # Change to days
                         mutate(time_on_dialysis = as.numeric(time_on_dialysis),
