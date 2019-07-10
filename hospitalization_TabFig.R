@@ -7,10 +7,10 @@
 
 # setup ---------------------------------------------------------------------------------------
 
-ProjTemplate::reload()
+abhiR::reload()
 # dbdir = verifyPaths(); dir.exists(dbdir)
-dropdir <- file.path(ProjTemplate::find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
-load(file.path(dropdir, 'modeling_data.rda'))
+dropdir <- file.path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
+load(path(dropdir, 'modeling_data.rda'))
 
 ## Munge modeling data once here for all the tables
 
@@ -34,7 +34,7 @@ munge_data <- function(d){
                                         '<50' = '[40,50)')) %>% 
     select(time_from_event, cens_type, age_at_event, agegrp_at_event, Race, Age = age_cat, Sex = SEX, Region = REGION, zscore,
             comorb_indx,
-           time_on_dialysis)
+           time_on_dialysis, ESRD_Cause)
   
 }
 
@@ -44,7 +44,7 @@ events <- c('stroke_primary' = 'Stroke',
             'thrive' = 'Failure to thrive')
 
 munged_modeling <- map(modeling_data, munge_data)
-save(munged_modeling, file = file.path(dropdir, 'munged_modeling.rda'), compress = T)
+save(munged_modeling, file = path(dropdir, 'munged_modeling.rda'), compress = T)
 
 # Table 1 -------------------------------------------------------------------------------------
 
