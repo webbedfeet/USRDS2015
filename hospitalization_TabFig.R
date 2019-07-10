@@ -34,7 +34,7 @@ munge_data <- function(d){
                                         '<50' = '[40,50)')) %>% 
     select(time_from_event, cens_type, age_at_event, agegrp_at_event, Race, Age = age_cat, Sex = SEX, Region = REGION, zscore,
             comorb_indx,
-           time_on_dialysis, ESRD_Cause)
+           time_on_dialysis)
   
 }
 
@@ -104,7 +104,7 @@ out_crude <- map(cph1_list, ~tidy(.) %>% select(term, estimate, starts_with('con
 ### Adjusted
 hosp_coxph <- map(munged_modeling,
                   ~ coxph(Surv(time_from_event+0.1, cens_type==3)~Race + agegrp_at_event + Sex + zscore +
-                            Region + comorb_indx + time_on_dialysis + ESRD_Cause, data = .) %>%
+                            Region + comorb_indx + time_on_dialysis, data = .) %>%
                     broom::tidy() %>%
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
@@ -136,7 +136,7 @@ out_crude_surv <- map(cph1_list_surv,
 ### Adjusted
 hosp_coxph_surv <- map(munged_modeling,
                   ~ coxph(Surv(time_from_event+0.1, cens_type %in% c(1,3))~Race + agegrp_at_event + Sex + zscore +
-                            Region + comorb_indx + time_on_dialysis + ESRD_Cause, data = .) %>%
+                            Region + comorb_indx + time_on_dialysis , data = .) %>%
                     broom::tidy() %>%
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
@@ -179,7 +179,7 @@ munged_modeling_old <- map(munged_modeling, ~filter(., age_at_event >= 70) %>%
 
 hosp_coxph_young <- map(munged_modeling_young,
                   ~ coxph(Surv(time_from_event+0.1, cens_type==3)~Race + agegrp_at_event + Sex + zscore +
-                            Region + comorb_indx + time_on_dialysis + ESRD_Cause, data = .) %>%
+                            Region + comorb_indx + time_on_dialysis, data = .) %>%
                     broom::tidy() %>%
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
@@ -193,7 +193,7 @@ hosp_coxph_young <- map(munged_modeling_young,
 
 hosp_coxph_old <- map(munged_modeling_old,
                   ~ coxph(Surv(time_from_event+0.1, cens_type==3)~Race + agegrp_at_event + Sex + zscore +
-                            Region + comorb_indx + time_on_dialysis + ESRD_Cause, data = .) %>%
+                            Region + comorb_indx + time_on_dialysis , data = .) %>%
                     broom::tidy() %>%
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
@@ -209,7 +209,7 @@ hosp_coxph_old <- map(munged_modeling_old,
 ### Adjusted
 hosp_surv_coxph_young <- map(munged_modeling_young,
                   ~ coxph(Surv(time_from_event, cens_type %in% c(1,3))~Race + agegrp_at_event + Sex + zscore +
-                            Region + comorb_indx + time_on_dialysis + ESRD_Cause, data = .) %>%
+                            Region + comorb_indx + time_on_dialysis , data = .) %>%
                     broom::tidy() %>%
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
@@ -223,7 +223,7 @@ hosp_surv_coxph_young <- map(munged_modeling_young,
 
 hosp_surv_coxph_old <- map(munged_modeling_old,
                   ~ coxph(Surv(time_from_event, cens_type %in% c(1,3))~Race + agegrp_at_event + Sex + zscore +
-                            Region + comorb_indx + time_on_dialysis + ESRD_Cause, data = .) %>%
+                            Region + comorb_indx + time_on_dialysis , data = .) %>%
                     broom::tidy() %>%
                     filter(str_detect(term, 'Race')) %>%
                     select(term, estimate, p.value:conf.high) %>%
