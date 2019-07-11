@@ -25,165 +25,178 @@ library(parallel)
 library(doParallel)
 no_cores <- detectCores()-1
 
-# extract data from DB ------------------------------------------------------------------------
-# 
-# sql_conn = dbConnect(SQLite(), file.path(dbdir,'USRDS.sqlite3'))
-# 
-# till2009 <- tbl(sql_conn, 'till2009')
-# from2010 <- tbl(sql_conn, 'from2010')
-# studyids <- tbl(sql_conn, 'StudyIDs') # These are people in the final analytic dataset,  N= 1,291,001
-# dbs <- list(till2009, from2010)
-# 
-# # Stroke ------------------------------------------------------------------
-# 
-# stroke <- dbs %>%
-#   lapply(., function(db){
-#     db %>%
-#       select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU)%>%
-#       mutate(PRIM = substr(HSDIAG1,1,3)) %>%
-#       filter(PRIM == '430' | PRIM=='431' | PRIM == '432' | PRIM == '433' | PRIM=='434') %>%
-#       inner_join(studyids) %>% # Keep only individuals in earlier study
-#       collect(n = Inf)
-#   })
-# 
-# stroke_primary <- stroke %>%
-#   lapply(., function(db) db %>%  select(USRDS_ID, CLM_FROM, CLM_THRU)) %>% bind_rows() %>% distinct() %>%
-#   mutate(dt = date_midpt(CLM_FROM, CLM_THRU))
-# head(stroke_primary)
-# # Stroke with complications -----------------------------------------------
-# 
-# stroke_compl <- stroke %>%
-#   lapply(., function(db){
-#     db %>% gather(diag, code, -USRDS_ID, -HSDIAG1, -CLM_THRU, -CLM_FROM) %>%
-#       mutate(code1 = substr(code,1,3)) %>%
-#       filter(code1 %in% c('438','342','344')) %>%
-#       select(USRDS_ID, CLM_FROM, CLM_THRU) %>%
-#       distinct()
-#   }) %>%
-#   bind_rows() %>%
-#   distinct() %>% mutate(dt = date_midpt(CLM_FROM,CLM_THRU))
-# 
-# head(stroke_compl)
-# 
-# # Lung cancer -------------------------------------------------------------
-# 
-# LuCa <- dbs %>%
-#   lapply(., function(db){
-#     db %>% mutate(PRIM = substr(HSDIAG1,1,3)) %>%
-#       filter(PRIM=='162') %>%
-#       inner_join(studyids) %>% # Keep only individuals in earlier study
-#       select(USRDS_ID, CLM_FROM, CLM_THRU) %>% collect(n=Inf)
-#   }) %>%
-#   bind_rows() %>% distinct() %>%
-#   mutate(dt = date_midpt(CLM_FROM, CLM_THRU))
-# head(LuCa)
-# # Metastatic cancer -------------------------------------------------------
-# 
-# MetsCa <- dbs %>%
-#   lapply(., function(db){
-#   db %>% mutate(PRIM=substr(HSDIAG1,1,3)) %>%
-#     filter(PRIM== '196' | PRIM == '197' | PRIM == '198' | PRIM == '199') %>%
-#       inner_join(studyids) %>%
-#     select(USRDS_ID, CLM_FROM, CLM_THRU) %>% collect(n = Inf)}) %>%
-#   bind_rows() %>%
-#   distinct() %>% mutate(dt = date_midpt(CLM_FROM, CLM_THRU))
-# head(MetsCa)
-# 
-# hospitalization <- list('stroke_primary' = stroke_primary,
-#                         'stroke_compl' = stroke_compl,
-#                         'LuCa' = LuCa,
-#                         'MetsCa' = MetsCa)
-#                         # 'dement' = dement,
-#                         # 'thrive' = thrive
-# saveRDS(hospitalization, file = 'data/hospitalization_ids.rds', compress = T)
-# 
-# # Dementia ----------------------------------------------------------------
-# 
-# ## I'm moving this to Python since it's much faster at processing the database
-# ## row-wise. However, I need to get some SQL calls generated here.
-# 
-# # till2009 %>% select(USRDS_ID, starts_with('HSDIAG')) %>% show_query()
-# # from2010 %>% select(USRDS_ID, starts_with("HSDIAG")) %>% show_query()
-# # reticulate::source_python('dementia.py')
-# 
-# # dementia <- read_csv('data/Dementia.csv')
-# # names(dementia) <- 'USRDS_ID'
-# # head(dementia)
-# 
-# StudyIDS <- studyids %>% collect(n=Inf)
-# sql1 <- paste(capture.output(till2009 %>%
-#                                select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU) %>%
-#                                show_query(), type='message')[-1], collapse=' ')
-# sql2 <- paste(capture.output(from2010 %>%
-#                                select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU) %>%
-#                                show_query(), type='message')[-1], collapse=' ')
-# sqlist <- list(sql1,sql2)
-# 
-# 
-# dement <- list()
-# i=0
-# for (sql in sqlist){
-#   print(paste('Running ',sql))
-#   rs <- dbSendQuery(sql_conn, sql)
-#   while(!dbHasCompleted(rs)){
-#     d <-  dbFetch(rs, n = 100000)
-#     i=i+1
-#     print(i)
-#     dement[[i]] <-d %>% gather(hsdiag, code, -USRDS_ID, -CLM_FROM, -CLM_THRU) %>%
-#                    filter(str_detect(code, '^290|^2941|^331[012]')) %>%
-#                    select(USRDS_ID, CLM_FROM, CLM_THRU) %>%
-#                    # distinct() %>% inner_join(StudyIDS) %>%
-#                    as.data.frame()
-#   }
-#   dbClearResult(rs)
-# }
-# 
-# dement1 <- bind_rows(dement)
-# dement1 <- dement1 %>% semi_join(StudyIDS) # Keep people from analytic dataset
-# 
-# hospitalization[['dement']] <- dement1
-# saveRDS(hospitalization, file = 'data/hospitalization_ids.rds', compress = T)
-# 
-# # Failure to thrive -------------------
-# ## This can appear in any of the diagnoses
-# 
-# sql1 <- paste(capture.output(till2009 %>%
-#                                select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU) %>%
-#                          show_query(), type='message')[-1], collapse=' ')
-# sql2 <- paste(capture.output(from2010 %>%
-#                                select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU) %>%
-#                                show_query(), type='message')[-1], collapse=' ')
-# sqlist <- list(sql1,sql2)
-# 
-# thrive = list()
-# i = 0
-# for (sql in sqlist) {
-#   rs <- dbSendQuery(sql_conn, sql)
-#   while (!dbHasCompleted(rs)) {
-#     d <- dbFetch(rs, n = 100000)
-#     i = i+1
-#     print(i)
-#     thrive[[i]] <-d %>% gather(hsdiag, code, starts_with("HSDIAG")) %>%
-#                   filter(str_detect(code, '783[237]')) %>%
-#                   select(USRDS_ID, CLM_FROM, CLM_THRU) %>%
-#   				  as.data.frame()
-#   }
-#   dbClearResult(rs)
-# }
-# 
-# thrive1 <- bind_rows(thrive) %>% semi_join(StudyIDS) # Keep people from analytic dataset
-# hospitalization[['thrive']] <- thrive1
-# 
-# 
-# saveRDS(hospitalization, file = 'data/hospitalization_ids.rds')
-# saveRDS(hospitalization, file = file.path(dropdir, 'hospitalization_ids.rds'))
-# 
-# dbDisconnect(sql_conn); gc()
+##%######################################################%##
+#                                                          #
+####              Extraction from database              ####
+#                                                          #
+##%######################################################%##
 
-######################################################################
-# End of database extraction
-# 
-######################################################################
+
+sql_conn = dbConnect(SQLite(), file.path(dbdir,'USRDS.sqlite3'))
+
+till2009 <- tbl(sql_conn, 'till2009')
+from2010 <- tbl(sql_conn, 'from2010')
+studyids <- tbl(sql_conn, 'StudyIDs') # These are people in the final analytic dataset,  N= 1,291,001
+dbs <- list(till2009, from2010)
+
+# Stroke ------------------------------------------------------------------
+
+stroke <- dbs %>%
+  lapply(., function(db){
+    db %>%
+      select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU)%>%
+      mutate(PRIM = substr(HSDIAG1,1,3)) %>%
+      filter(PRIM == '430' | PRIM=='431' | PRIM == '432' | PRIM == '433' | PRIM=='434') %>%
+      inner_join(studyids) %>% # Keep only individuals in earlier study
+      collect(n = Inf)
+  })
+
+stroke_primary <- stroke %>%
+  lapply(., function(db) db %>%  select(USRDS_ID, CLM_FROM, CLM_THRU)) %>% bind_rows() %>% distinct() %>%
+  mutate(dt = date_midpt(CLM_FROM, CLM_THRU))
+head(stroke_primary)
+# Stroke with complications -----------------------------------------------
+
+stroke_compl <- stroke %>%
+  lapply(., function(db){
+    db %>% gather(diag, code, -USRDS_ID, -HSDIAG1, -CLM_THRU, -CLM_FROM) %>%
+      mutate(code1 = substr(code,1,3)) %>%
+      filter(code1 %in% c('438','342','344')) %>%
+      select(USRDS_ID, CLM_FROM, CLM_THRU) %>%
+      distinct()
+  }) %>%
+  bind_rows() %>%
+  distinct() %>% mutate(dt = date_midpt(CLM_FROM,CLM_THRU))
+
+head(stroke_compl)
+
+# Lung cancer -------------------------------------------------------------
+
+LuCa <- dbs %>%
+  lapply(., function(db){
+    db %>% mutate(PRIM = substr(HSDIAG1,1,3)) %>%
+      filter(PRIM=='162') %>%
+      inner_join(studyids) %>% # Keep only individuals in earlier study
+      select(USRDS_ID, CLM_FROM, CLM_THRU) %>% collect(n=Inf)
+  }) %>%
+  bind_rows() %>% distinct() %>%
+  mutate(dt = date_midpt(CLM_FROM, CLM_THRU))
+head(LuCa)
+# Metastatic cancer -------------------------------------------------------
+
+MetsCa <- dbs %>%
+  lapply(., function(db){
+  db %>% mutate(PRIM=substr(HSDIAG1,1,3)) %>%
+    filter(PRIM== '196' | PRIM == '197' | PRIM == '198' | PRIM == '199') %>%
+      inner_join(studyids) %>%
+    select(USRDS_ID, CLM_FROM, CLM_THRU) %>% collect(n = Inf)}) %>%
+  bind_rows() %>%
+  distinct() %>% mutate(dt = date_midpt(CLM_FROM, CLM_THRU))
+head(MetsCa)
+
+hospitalization <- list('stroke_primary' = stroke_primary,
+                        'stroke_compl' = stroke_compl,
+                        'LuCa' = LuCa,
+                        'MetsCa' = MetsCa)
+                        # 'dement' = dement,
+                        # 'thrive' = thrive
+saveRDS(hospitalization, file = 'data/hospitalization_ids.rds', compress = T)
+
+# Dementia ----------------------------------------------------------------
+
+## I'm moving this to Python since it's much faster at processing the database
+## row-wise. However, I need to get some SQL calls generated here.
+
+# till2009 %>% select(USRDS_ID, starts_with('HSDIAG')) %>% show_query()
+# from2010 %>% select(USRDS_ID, starts_with("HSDIAG")) %>% show_query()
+# reticulate::source_python('dementia.py')
+
+# dementia <- read_csv('data/Dementia.csv')
+# names(dementia) <- 'USRDS_ID'
+# head(dementia)
+
+StudyIDS <- studyids %>% collect(n=Inf)
+sql1 <- paste(capture.output(till2009 %>%
+                               select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU) %>%
+                               show_query(), type='message')[-1], collapse=' ')
+sql2 <- paste(capture.output(from2010 %>%
+                               select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU) %>%
+                               show_query(), type='message')[-1], collapse=' ')
+sqlist <- list(sql1,sql2)
+
+
+dement <- list()
+i=0
+for (sql in sqlist){
+  print(paste('Running ',sql))
+  rs <- dbSendQuery(sql_conn, sql)
+  while(!dbHasCompleted(rs)){
+    d <-  dbFetch(rs, n = 100000)
+    i=i+1
+    print(i)
+    dement[[i]] <-d %>% gather(hsdiag, code, -USRDS_ID, -CLM_FROM, -CLM_THRU) %>%
+                   filter(str_detect(code, '^290|^2941|^331[012]')) %>%
+                   select(USRDS_ID, CLM_FROM, CLM_THRU) %>%
+                   # distinct() %>% inner_join(StudyIDS) %>%
+                   as.data.frame()
+  }
+  dbClearResult(rs)
+}
+
+dement1 <- bind_rows(dement)
+dement1 <- dement1 %>% semi_join(StudyIDS) # Keep people from analytic dataset
+
+hospitalization[['dement']] <- dement1
+saveRDS(hospitalization, file = 'data/hospitalization_ids.rds', compress = T)
+
+# Failure to thrive -------------------
+## This can appear in any of the diagnoses
+
+sql1 <- paste(capture.output(till2009 %>%
+                               select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU) %>%
+                         show_query(), type='message')[-1], collapse=' ')
+sql2 <- paste(capture.output(from2010 %>%
+                               select(USRDS_ID, starts_with('HSDIAG'), CLM_FROM, CLM_THRU) %>%
+                               show_query(), type='message')[-1], collapse=' ')
+sqlist <- list(sql1,sql2)
+
+thrive = list()
+i = 0
+for (sql in sqlist) {
+  rs <- dbSendQuery(sql_conn, sql)
+  while (!dbHasCompleted(rs)) {
+    d <- dbFetch(rs, n = 100000)
+    i = i+1
+    print(i)
+    thrive[[i]] <-d %>% gather(hsdiag, code, starts_with("HSDIAG")) %>%
+                  filter(str_detect(code, '783[237]')) %>%
+                  select(USRDS_ID, CLM_FROM, CLM_THRU) %>%
+  				  as.data.frame()
+  }
+  dbClearResult(rs)
+}
+
+thrive1 <- bind_rows(thrive) %>% semi_join(StudyIDS) # Keep people from analytic dataset
+hospitalization[['thrive']] <- thrive1
+
+
+saveRDS(hospitalization, file = 'data/hospitalization_ids.rds')
+saveRDS(hospitalization, file = file.path(dropdir, 'hospitalization_ids.rds'))
+
+dbDisconnect(sql_conn); gc()
+
+
+# End of database extraction ----------------------------------------------
+
+
+
+##%######################################################%##
+#                                                          #
+####           Creating intermediate datasets           ####
+#                                                          #
+##%######################################################%##
+
+
 
 abhiR::reload()
 hospitalization <- readRDS(path(dropdir, 'hospitalization_ids.rds'))
@@ -192,23 +205,21 @@ Dat <- read_fst(path(dropdir,'Analytic.fst'))
 
 # The following code computes survival date as the minimum of loss-to-followup,
 # discontinuation time, death and transplant date
-Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, 
+Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED,
                                        TX1DATE, na.rm=T)) %>%
   mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
-
 
 # Adding DISGRPC codes to analytic data --------------------------------------------
 
 disgrpc_code <- readRDS(path(dropdir, 'disgrpc_code.rds')) # See cause_esrd.R
-disgrpc <- fst(path(dropdir, 'raw_data.fst'))[,c('USRDS_ID','DISGRPC')] %>% 
-  distinct() %>% 
-  left_join(disgrpc_code, by=c('DISGRPC'='Format')) %>% 
-  mutate(Description = ifelse(Description %in% c('8','**OTHER**'), NA, Description)) %>% 
-  mutate(Description = fct_other(Description,keep=c('Diabetes','Hypertension','Glomeruloneph.'))) %>% 
+disgrpc <- fst(path(dropdir, 'raw_data.fst'))[,c('USRDS_ID','DISGRPC')] %>%
+  distinct() %>%
+  left_join(disgrpc_code, by=c('DISGRPC'='Format')) %>%
+  mutate(Description = ifelse(Description %in% c('8','**OTHER**'), NA, Description)) %>%
+  mutate(Description = fct_other(Description,keep=c('Diabetes','Hypertension','Glomeruloneph.'))) %>%
   rename(ESRD_Cause = Description)
 Dat <- Dat %>% left_join(disgrpc) # Adding reason for dialysis
 fst::write_fst(Dat, path(dropdir,'revision_JASN','Analytic_DISGRPC.fst'))
-
 
 # Filter index conditions by events after start of dialysis -----------------------------------
 # IDEA: We could also look at individuals who had index condition soon followed by dialysis,
@@ -227,7 +238,6 @@ hosp_post_dx <-
         distinct() %>%
         ungroup())
 
-# saveRDS(hosp_post_dx, 'data/rda/final_hosp_data.rds', compress = T)
 saveRDS(hosp_post_dx, file.path(dropdir, 'revision_JASN','final_hosp_data.rds'), compress = T)
 
 
@@ -336,7 +346,7 @@ out2 <- map(hosp_post_dx, ~.x %>% group_by(RACE2) %>% summarise(prop_withdrew = 
   unite(Overall, c('prop_withdrew', 'N'), sep = ' / ')
 
 out <- left_join(out1, out2, by=c("Index event" = 'index_condition','Race'='RACE2'))
-openxlsx::write.xlsx(out, file='Withdrawal_age_race.xlsx')
+openxlsx::write.xlsx(out, file='results/revision_JASN/Withdrawal_age_race.xlsx')
 
 # Median time after index condition to discontinuation ----------------------------------------
 
@@ -350,7 +360,7 @@ map(hosp_postdx_age, ~.x %>%
   spread(agegrp_at_event, median_time) %>%
   mutate(index_condition = transform_indx(index_condition)) %>%
   rename('Index event' = 'index_condition', 'Race' = 'RACE2') %>%
-  openxlsx::write.xlsx(file = 'Time_to_withdrawal.xlsx')
+  openxlsx::write.xlsx(file = 'results/revision_JASN/Time_to_withdrawal.xlsx')
 
 
 # Survival analysis on discontinuation --------------------------------------------------------
@@ -372,13 +382,14 @@ for(i in 1:6){
                                          censor = F, risk.table = F, 
                                          xlab = 'Time (days)',
                                          ylab = 'Percent who discontinued dialysis',
-                                         legend = 'bottom')$plot +
+                                         legend = 'bottom',
+                                         title = names(fit_list)[i])$plot +
     scale_y_continuous(labels = scales::percent) + 
     annotate('text', x = 50, y = 0.1, label = paste0('p-value : ', logrank_list[[i]]), hjust = 0) + 
     theme( legend.justification = c(0.5, 0.5))
 }
 
-pdf('KaplanMeierPlots.pdf')
+pdf('graphs/revision_JASN/KaplanMeierPlots.pdf')
 for(i in 1:6) print(plt_list[[i]])
 dev.off()
 
@@ -405,7 +416,7 @@ bind_rows(hosp_coxph, .id = 'Index event') %>%
   theme(axis.text.x = element_text(angle = 45, hjust=1)) +
   scale_y_continuous('HR for discontinuation, compared to Whites', breaks = seq(0.4,1.4, by = 0.2))+
   labs(x = '') +
-  ggsave('ForestPlot.pdf')
+  ggsave('graphs/revision_JASN/ForestPlot.pdf')
 
 bind_rows(hosp_coxph, .id = 'Index event') %>%
   rename(Race = term, HR = estimate, `P-value` = p.value, `95% LCB` = conf.low, `95% UCB` = conf.high) %>% 
@@ -416,7 +427,7 @@ bind_rows(hosp_coxph, .id = 'Index event') %>%
                                    `Index event` == 'dement' ~ 'Dementia',
                                    `Index event` == 'thrive' ~ 'Failure to thrive')) %>% 
   clean_cols(`Index event`) %>% 
-  openxlsx::write.xlsx('CoxPH.xlsx', colWidths = 'auto', 
+  openxlsx::write.xlsx('results/revision_JASN/CoxPH.xlsx', colWidths = 'auto', 
                        headerStyle = openxlsx::createStyle(textDecoration = 'BOLD'),
                        overwrite = TRUE)
 
@@ -433,7 +444,7 @@ Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, 
 Dat <- Dat %>%
   mutate(withdraw_to_death = ifelse(cens_type==3 & !is.na(BEGIN_withdraw),
                                     tod - tow, NA))
-Dat %>% filter(RACE2 != 'Other') %>% ggplot(aes(x = RACE2, y = withdraw_to_death))+geom_boxplot()
+Dat %>% filter(RACE2 != 'Other') %>% ggplot(aes(x = RACE2, y = withdraw_to_death * 365.25))+geom_boxplot()
 Dat %>% filter(RACE2 != 'Other', cens_type==3) %>%
   kruskal.test(withdraw_to_death~RACE2, data=.) %>%
   broom::tidy()
@@ -462,8 +473,7 @@ load(file.path(dropdir, 'revision_JASN', 'modeling_data.rda'))
 cl <- makeCluster(no_cores)
 registerDoParallel(cl)
 
-# TODO: Create a sim_fn including ESRD_Cause
-cox_models <- sim_fn(modeling_data2)
+cox_models <- sim_fn_cause(modeling_data2)
 saveRDS(cox_models, file.path(dropdir, 'revision_JASN', 'cox_models.rds'), compress = T)
 
 bl <- modify_depth(cox_models, 2, ~select(., term, estimate) %>%
@@ -471,7 +481,7 @@ bl <- modify_depth(cox_models, 2, ~select(., term, estimate) %>%
   map(~bind_rows(.) )
 bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
 
-pdf('SimulationResults.pdf')
+pdf('graphs/revision_JASN/SimulationResults.pdf')
 for(n in names(bl)){
   print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
           facet_wrap(~term, scales = 'free', nrow = 2)+
@@ -482,7 +492,7 @@ dev.off()
 
 
 # Simulation study stratified by group --------------------------------------------------------
-load(file.path(dropdir, 'modeling_data.rda'))
+load(file.path(dropdir, 'revision_JASN','modeling_data.rda'))
 modeling_data2_young <- modify_depth(modeling_data2, 2, ~filter(., age_at_event < 70))
 modeling_data2_old <- modify_depth(modeling_data2, 2, ~filter(., age_at_event >= 70))
 
@@ -495,8 +505,8 @@ N_old <- modify_depth(modeling_data2_old, 1, ~map_df(., nrow)) %>%
 cl <- makeCluster(no_cores)
 registerDoParallel(cl)
 
-cox_models_young <- sim_fn(modeling_data2_young)
-cox_models_old <- sim_fn(modeling_data2_old)
+cox_models_young <- sim_fn_cause(modeling_data2_young)
+cox_models_old <- sim_fn_cause(modeling_data2_old)
 
 stopCluster(cl)
 
@@ -505,7 +515,7 @@ bl <- modify_depth(cox_models_old, 2, ~select(., term, estimate) %>%
   map(~bind_rows(.) )
 bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
 
-pdf('SimulationResults_old.pdf')
+pdf('graphs/revision_JASN/SimulationResults_old.pdf')
 for(n in names(bl)){
   print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
           facet_wrap(~term, scales = 'free', nrow = 2)+
@@ -519,7 +529,7 @@ bl <- modify_depth(cox_models_young, 2, ~select(., term, estimate) %>%
   map(~bind_rows(.) )
 bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
 
-pdf('SimulationResults_young.pdf')
+pdf('graphs/revision_JASN/SimulationResults_young.pdf')
 for(n in names(bl)){
   print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
           facet_wrap(~term, scales = 'free', nrow = 2)+
@@ -575,14 +585,14 @@ openxlsx::write.xlsx(list('Overall' = final_tbl,
 
 
 # Summaries of Weibull models -----------------------------------------------------------------
-load(file.path(dropdir, 'modeling_data.rda'))
+load(file.path(dropdir,'revision_JASN', 'modeling_data.rda'))
 weib_models <- list()
 for (cnd in names(modeling_data2)){
   D = modeling_data2[[cnd]]
   weib_models[[cnd]] <- survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
                                   agegrp_at_event + SEX  + time_on_dialysis +
                                   REGION+
-                                  zscore + comorb_indx,
+                                  zscore + comorb_indx + ESRD_Cause,
                                 data = D$White,
                                 dist = 'weibull')
 }
@@ -591,7 +601,7 @@ weib_res <- map(weib_models, broom::tidy)
 
 ## Cox-Snell graphs
 
-pdf('CoxSnell.pdf')
+pdf('graphs/revision_JASN/CoxSnell.pdf')
 for(n in names(weib_models)){
   cs <- cox_snell(weib_models[[n]], modeling_data2[[n]]$White)
   title(main = n)
@@ -637,5 +647,8 @@ out <- map(out, ~ mutate(., Variables = case_when(Variables == 'agegrp_at_event'
                                                     Variables == 'zscore' ~ 'SES Score',
                                                     TRUE ~ '')) %>% 
              rename(Group = value))
-openxlsx::write.xlsx(out, file = 'WhiteModels.xlsx', 
+openxlsx::write.xlsx(out, file = 'results/revision_JASN/WhiteModels.xlsx', 
                      headerStyle = openxlsx::createStyle(textDecoration = 'BOLD') )
+
+
+

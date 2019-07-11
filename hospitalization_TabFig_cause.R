@@ -389,8 +389,7 @@ bl$plots[[4]] <- bl$plots[[4]]  + theme(axis.ticks.x = element_line(),
                                         axis.text.x = element_text(size = 10))
 
 plt_disc <- plot_grid(plotlist = bl$plots, ncol = 1, align = 'v', rel_heights = c(1,1,1,1.2),
-          labels = levels(d$Event), label_size = 10, label_x = 0.25, vjust = 1, hjust = 0)
-+
+          labels = levels(d$Event), label_size = 10, label_x = 0.25, vjust = 1, hjust = 0) +
   draw_label('Probability', x = 0.02, y = 0.5, angle = 90, hjust = 0.2, vjust = 1)
 title = ggdraw() + draw_label('Discontinuation', fontface = 'bold')
 bottom = ggdraw() + draw_label('Days from event', size = 12)
