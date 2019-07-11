@@ -178,12 +178,11 @@ saveRDS(hospitalization, file = file.path(dropdir, 'hospitalization_ids.rds'))
 
 dbDisconnect(sql_conn); gc()
 
-######################################################################
-# End of database extraction
-# 
-######################################################################
-
-
+##%######################################################%##
+#                                                          #
+####             End of database extraction             ####
+#                                                          #
+##%######################################################%##
 
 abhiR::reload()
 hospitalization <- readRDS(path(dropdir, 'hospitalization_ids.rds'))
