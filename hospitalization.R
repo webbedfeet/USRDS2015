@@ -323,7 +323,7 @@ out2 <- map(hosp_post_dx, ~.x %>% group_by(RACE2) %>% summarise(prop_withdrew = 
   unite(Overall, c('prop_withdrew', 'N'), sep = ' / ')
 
 out <- left_join(out1, out2, by=c("Index event" = 'index_condition','Race'='RACE2'))
-openxlsx::write.xlsx(out, file='Withdrawal_age_race.xlsx')
+openxlsx::write.xlsx(out, file='results/Withdrawal_age_race.xlsx')
 
 # Median time after index condition to discontinuation ----------------------------------------
 
@@ -337,7 +337,7 @@ map(hosp_postdx_age, ~.x %>%
   spread(agegrp_at_event, median_time) %>%
   mutate(index_condition = transform_indx(index_condition)) %>%
   rename('Index event' = 'index_condition', 'Race' = 'RACE2') %>%
-  openxlsx::write.xlsx(file = 'Time_to_withdrawal.xlsx')
+  openxlsx::write.xlsx(file = 'results/Time_to_withdrawal.xlsx')
 
 
 # Survival analysis on discontinuation --------------------------------------------------------
@@ -362,7 +362,7 @@ for(i in 1:6){
     theme(legend.position = 'bottom', legend.justification = c(0.5, 0.5))
 }
 
-pdf('KaplanMeierPlots.pdf')
+pdf('graphs/KaplanMeierPlots.pdf')
 for(i in 1:6) print(plt_list[[i]])
 dev.off()
 
@@ -389,7 +389,7 @@ bind_rows(hosp_coxph, .id = 'Index event') %>%
   theme(axis.text.x = element_text(angle = 45, hjust=1)) +
   scale_y_continuous('HR for discontinuation, compared to Whites', breaks = seq(0.4,1.4, by = 0.2))+
   labs(x = '') +
-  ggsave('ForestPlot.pdf')
+  ggsave('graphs/ForestPlot.pdf')
 
 bind_rows(hosp_coxph, .id = 'Index event') %>%
   rename(Race = term, HR = estimate, `P-value` = p.value, `95% LCB` = conf.low, `95% UCB` = conf.high) %>% 
@@ -400,7 +400,7 @@ bind_rows(hosp_coxph, .id = 'Index event') %>%
                                    `Index event` == 'dement' ~ 'Dementia',
                                    `Index event` == 'thrive' ~ 'Failure to thrive')) %>% 
   clean_cols(`Index event`) %>% 
-  openxlsx::write.xlsx('CoxPH.xlsx', colWidths = 'auto', 
+  openxlsx::write.xlsx('results/CoxPH.xlsx', colWidths = 'auto', 
                        headerStyle = openxlsx::createStyle(textDecoration = 'BOLD'),
                        overwrite = TRUE)
 
@@ -409,8 +409,8 @@ bind_rows(hosp_coxph, .id = 'Index event') %>%
 # Evaluating how long from discontinuation to death -------------------------------------------
 
 ProjTemplate::reload()
-hospitalization <- readRDS('data/hospitalization_ids.rds')
-Dat <- readRDS('data/rda/Analytic.rds')
+hospitalization <- readRDS(path(dropdir, 'hospitalization_ids.rds'))
+Dat <- readRDS(path(dropdir,'Analytic.rds'))
 Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED, TX1DATE, na.rm=T)) %>%
   mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
 
@@ -454,7 +454,7 @@ bl <- modify_depth(cox_models, 2, ~select(., term, estimate) %>%
   map(~bind_rows(.) )
 bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
 
-pdf('SimulationResults.pdf')
+pdf('graphs/SimulationResults.pdf')
 for(n in names(bl)){
   print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
           facet_wrap(~term, scales = 'free', nrow = 2)+
@@ -488,7 +488,7 @@ bl <- modify_depth(cox_models_old, 2, ~select(., term, estimate) %>%
   map(~bind_rows(.) )
 bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
 
-pdf('SimulationResults_old.pdf')
+pdf('graphs/SimulationResults_old.pdf')
 for(n in names(bl)){
   print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
           facet_wrap(~term, scales = 'free', nrow = 2)+
@@ -502,7 +502,7 @@ bl <- modify_depth(cox_models_young, 2, ~select(., term, estimate) %>%
   map(~bind_rows(.) )
 bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
 
-pdf('SimulationResults_young.pdf')
+pdf('graphs/SimulationResults_young.pdf')
 for(n in names(bl)){
   print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
           facet_wrap(~term, scales = 'free', nrow = 2)+
@@ -574,7 +574,7 @@ weib_res <- map(weib_models, broom::tidy)
 
 ## Cox-Snell graphs
 
-pdf('CoxSnell.pdf')
+pdf('graphs/CoxSnell.pdf')
 for(n in names(weib_models)){
   cs <- cox_snell(weib_models[[n]], modeling_data2[[n]]$White)
   title(main = n)
@@ -620,5 +620,5 @@ out <- map(out, ~ mutate(., Variables = case_when(Variables == 'agegrp_at_event'
                                                     Variables == 'zscore' ~ 'SES Score',
                                                     TRUE ~ '')) %>% 
              rename(Group = value))
-openxlsx::write.xlsx(out, file = 'WhiteModels.xlsx', 
+openxlsx::write.xlsx(out, file = 'results/WhiteModels.xlsx', 
                      headerStyle = openxlsx::createStyle(textDecoration = 'BOLD') )
