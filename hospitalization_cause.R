@@ -25,6 +25,14 @@ library(parallel)
 library(doParallel)
 no_cores <- detectCores()-1
 
+condition_code <- c('stroke_primary' = 'Primary Stroke',
+                    'stroke_compl' = 'Complicated Stroke',
+                    'LuCa' = 'Lung Cancer',
+                    'MetsCa' = 'Metastatic Cancer',
+                    'dement' = 'Dementia',
+                    'thrive' = 'Failure to thrive'
+                    )
+
 ##%######################################################%##
 #                                                          #
 ####              Extraction from database              ####
@@ -205,8 +213,10 @@ Dat <- read_fst(path(dropdir,'Analytic.fst'))
 
 # The following code computes survival date as the minimum of loss-to-followup,
 # discontinuation time, death and transplant date
-Dat <- Dat %>% mutate(surv_date = pmin(cens_time, withdraw_time, DIED,
+Dat <- Dat %>% 
+  mutate(surv_date = pmin(cens_time, withdraw_time, DIED,
                                        TX1DATE, na.rm=T)) %>%
+  mutate(surv_date2 = pmin(cens_time, withdraw_time, DIED, na.rm=T)) %>% # Removes transplant time as a potential censoring time. The clock no longer stops at transplant times
   mutate(RACE2 = forcats::fct_relevel(RACE2, 'White'))
 
 # Adding DISGRPC codes to analytic data --------------------------------------------
@@ -228,7 +238,8 @@ fst::write_fst(Dat, path(dropdir,'revision_JASN','Analytic_DISGRPC.fst'))
 hosp_post_dx <-
   map(hospitalization, ~ .x %>%
         mutate(CLM_FROM = as.Date(CLM_FROM)) %>%
-        left_join(Dat %>% select(USRDS_ID, FIRST_SE, surv_date, cens_type, 
+        left_join(Dat %>% select(USRDS_ID, FIRST_SE, surv_date, surv_date2,
+                                 cens_type, 
                                  RACE2, DISGRPC, ESRD_Cause)) %>% # Add cause of dialysis
         filter(CLM_FROM >= FIRST_SE, CLM_FROM <= surv_date) %>%
         group_by(USRDS_ID) %>%
@@ -318,9 +329,13 @@ save(modeling_data, modeling_data2, file = file.path(dropdir,'revision_JASN','mo
 
 # TODO: Figure out which analysis makes the most sense
 
-################################################################################################
-# Analyses
-################################################################################################
+
+##%######################################################%##
+#                                                          #
+####                      Analyses                      ####
+#                                                          #
+##%######################################################%##
+
 
 
 # What is the chance of discontinuation, by age and race --------------------------------------
@@ -541,48 +556,48 @@ dev.off()
 save(cox_models_young, cox_models_old, file = file.path(dropdir, 'revision_JASN', 'cox_models_sim_strat.rda'), 
      compress = T)
 
-# YLL and observed time computations ----------------------------------------------------------------------------
-
-load(file.path(dropdir, 'modeling_data.rda'))
-cl <- makeCluster(no_cores)
-registerDoParallel(cl)
-sim_results <- sim_fn_yll(modeling_data2)
-stopCluster(cl)
-
-
-# obstimes <- out_obstimes_fn(simres, modeling_data2)
-# nominal_obstimes <- map(modeling_data, ~mutate(., time_from_event = ifelse(cens_type ==3, time_from_event + 7, time_from_event)) %>%
-#                                                  group_by(Race) %>%
-#                                                  summarize(nominal_obstime = sum(time_from_event, na.rm=T)) %>%
-#                           ungroup() %>%
-#                           mutate(Race = as.character(Race)))
-
-yll <- out_yll_fn(sim_results)
-final_tbl <- out_obstimes_fn(sim_results, modeling_data2)
-
-## Repeat for stratified analyses
-cl <- makeCluster(no_cores)
-registerDoParallel(cl)
-sim_results_young <- sim_fn_yll(modeling_data2_young)
-sim_results_old <- sim_fn_yll(modeling_data2_old)
-stopCluster(cl)
-
-
-yll_young <- out_yll_fn(sim_results_young)
-yll_old <- out_yll_fn(sim_results_old)
-
-final_tbl_young = out_obstimes_fn(sim_results_young, modeling_data2_young)
-final_tbl_old = out_obstimes_fn(sim_results_old, modeling_data2_old)
-
-openxlsx::write.xlsx(list('Overall' = final_tbl,
-                          'Young' = final_tbl_young,
-                          'Old' = final_tbl_old,
-                          'Overall-YLL' = yll,
-                          'Young-YLL' = yll_young,
-                          'Old-YLL' = yll_old),
-                     file='ObsTime.xlsx',
-                     headerStyle = openxlsx::createStyle(textDecoration = 'BOLD'))
-
+# # YLL and observed time computations ----------------------------------------------------------------------------
+# 
+# load(file.path(dropdir, 'modeling_data.rda'))
+# cl <- makeCluster(no_cores)
+# registerDoParallel(cl)
+# sim_results <- sim_fn_yll(modeling_data2)
+# stopCluster(cl)
+# 
+# 
+# # obstimes <- out_obstimes_fn(simres, modeling_data2)
+# # nominal_obstimes <- map(modeling_data, ~mutate(., time_from_event = ifelse(cens_type ==3, time_from_event + 7, time_from_event)) %>%
+# #                                                  group_by(Race) %>%
+# #                                                  summarize(nominal_obstime = sum(time_from_event, na.rm=T)) %>%
+# #                           ungroup() %>%
+# #                           mutate(Race = as.character(Race)))
+# 
+# yll <- out_yll_fn(sim_results)
+# final_tbl <- out_obstimes_fn(sim_results, modeling_data2)
+# 
+# ## Repeat for stratified analyses
+# cl <- makeCluster(no_cores)
+# registerDoParallel(cl)
+# sim_results_young <- sim_fn_yll(modeling_data2_young)
+# sim_results_old <- sim_fn_yll(modeling_data2_old)
+# stopCluster(cl)
+# 
+# 
+# yll_young <- out_yll_fn(sim_results_young)
+# yll_old <- out_yll_fn(sim_results_old)
+# 
+# final_tbl_young = out_obstimes_fn(sim_results_young, modeling_data2_young)
+# final_tbl_old = out_obstimes_fn(sim_results_old, modeling_data2_old)
+# 
+# openxlsx::write.xlsx(list('Overall' = final_tbl,
+#                           'Young' = final_tbl_young,
+#                           'Old' = final_tbl_old,
+#                           'Overall-YLL' = yll,
+#                           'Young-YLL' = yll_young,
+#                           'Old-YLL' = yll_old),
+#                      file='ObsTime.xlsx',
+#                      headerStyle = openxlsx::createStyle(textDecoration = 'BOLD'))
+# 
 
 # Summaries of Weibull models -----------------------------------------------------------------
 load(file.path(dropdir,'revision_JASN', 'modeling_data.rda'))
@@ -649,6 +664,5 @@ out <- map(out, ~ mutate(., Variables = case_when(Variables == 'agegrp_at_event'
              rename(Group = value))
 openxlsx::write.xlsx(out, file = 'results/revision_JASN/WhiteModels.xlsx', 
                      headerStyle = openxlsx::createStyle(textDecoration = 'BOLD') )
-
 
 
