@@ -288,6 +288,7 @@ hosp_cox_data <-
   map(hosp_postdx_age, ~.x %>%
         left_join(select(Dat,  SEX, zscore, USRDS_ID, REGION)) %>% 
         mutate(time_from_event = as.numeric(surv_date-CLM_FROM)) %>%
+        mutate(time_from_event2 = as.numeric(surv_date2 - CLM_FROM)) %>% 
         mutate(time_on_dialysis = se_to_event_time) %>%
         rename('Race' = "RACE2") %>%
         filter(Race != 'Other') %>%
