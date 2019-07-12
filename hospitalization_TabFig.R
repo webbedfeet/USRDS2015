@@ -419,8 +419,8 @@ plt_surv <- plot_grid(plotlist = bl2$plots, ncol = 1, align = 'v', rel_heights =
 title2 = ggdraw() + draw_label('Mortality', fontface = 'bold')
 plt_surv_complete = plot_grid(title2, plt_surv, ncol = 1, rel_heights = c(0.1, 1))
 
-plt1 <- plot_grid(plt_disc_complete, plt_surv_complete, nrow=1, rel_widths = c(0.95, 1)) + 
-  draw_label('Probability', x = 0.02, y = 0.5, angle = 90, hjust = 0.2, vjust = 0.3)
+plt1 <- plot_grid(plt_disc_complete, plt_surv_complete, nrow=1, rel_widths = c(0.95, 1)) #+ 
+  # draw_label('Probability', x = 0.02, y = 0.5, angle = 90, hjust = 0.2, vjust = 0.3)
 
 plt <- plt1 %>% 
   plot_grid(bottom, ncol = 1, rel_heights = c(1,0.05)) %>%
