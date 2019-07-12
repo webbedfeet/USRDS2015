@@ -352,13 +352,16 @@ cph1_list <-  map(modeling_data, ~ coxph(Surv(time_from_event, cens_type==3)~ Ra
 logrank_list <- map(cph1_list, ~format.pval(anova(.)[2,4], eps=1e-6))
 plt_list <- vector('list',6)
 for(i in 1:6){
-  plt_list[[i]] <- survMisc::autoplot(fit_list[[i]], type='single', censSize = 0,
-                                      title = names(fit_list)[i],
-                                      xLab = 'Days from index event',
-                                      legTitle = '')$plot +
-    scale_y_continuous('Percent who discontinued dialysis', labels = scales::percent)+
-    annotate('text', x = 50, y = 0.1, label=paste0('p-value : ', logrank_list[[i]]),hjust=0) +
-    theme(legend.position = 'bottom', legend.justification = c(0.5, 0.5))
+  plt_list[[i]] <- survminer::ggsurvplot(fit_list[[i]], data = modeling_data[[i]],
+                                         conf.int = F, pval = F, 
+                                         censor = F, risk.table = F, 
+                                         xlab = 'Time (days)',
+                                         ylab = 'Percent who discontinued dialysis',
+                                         legend = 'bottom',
+                                         title = names(fit_list)[i])$plot +
+    scale_y_continuous(labels = scales::percent) + 
+    annotate('text', x = 50, y = 0.1, label = paste0('p-value : ', logrank_list[[i]]), hjust = 0) + 
+    theme( legend.justification = c(0.5, 0.5))
 }
 
 pdf('graphs/KaplanMeierPlots.pdf')
