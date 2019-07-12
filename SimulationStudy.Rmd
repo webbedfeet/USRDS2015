@@ -1,0 +1,37 @@
+---
+title: "Simulation Study"
+author: "Abhijit Dasgupta"
+date: "7/12/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Objective
+
+We have postulated that the observed racial difference in survival in ESRD patients 
+can be attributed to different propensities to discontinue dialysis. In this study, 
+we will model the dialysis discontinuation process in whites as a Weibull regression model,
+and use it to provided predicted discontinuation times for other racial groups; this will 
+represent discontinuation times in those racial groups if they behaved the same as whites. We will
+then use these discontinuation times to compute survival times for each subject, i.e. the minimum of 
+the time of death, the time of transplant, the predicted time of discontinuation under the Weibull model for whites, and loss-to-followup. For mortality, we will consider death or discontinuation as 
+the event of interest (since median survival time after discontinuation is 7 days), with transplant and loss to followup being censoring events. 
+
+## Implementation
+
+In this simulation
+study, for each patient subgroup based on disease condition (stroke, lung cancer, 
+metastatic cancer, dementia, failure to thrive) we first model the time to discontinuation in Whites as a Weibull regression model,
+with death, loss-to-followup and kidney transplant being censoring events and 
+dialysis discontinuation being the event of interest. The regressors (independent
+variables) are age at the time the disease condition was diagnosed (categorized by decade of age),
+gender, time on dialysis, geographic region (Northeast, Midwest, South and West),
+socio-economic status score, comorbidity index and cause of ESRD (Diabetes, Glumerulonephritis, 
+Hypertension and Other). We validated the fit of these models using Cox-Snell residuals
+and their agreement with a unit exponential distribution, and the models showed adequate fit. 
+
+
+
