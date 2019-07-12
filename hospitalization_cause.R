@@ -20,9 +20,6 @@
 ProjTemplate::reload()
 # dbdir = verifyPaths(); dir.exists(dbdir)
 dropdir <- file.path(ProjTemplate::find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
-library(foreach)
-library(parallel)
-library(doParallel)
 no_cores <- detectCores()-1
 
 condition_code <- c('stroke_primary' = 'Primary Stroke',
@@ -362,7 +359,7 @@ out2 <- map(hosp_post_dx, ~.x %>% group_by(RACE2) %>% summarise(prop_withdrew = 
   unite(Overall, c('prop_withdrew', 'N'), sep = ' / ')
 
 out <- left_join(out1, out2, by=c("Index event" = 'index_condition','Race'='RACE2'))
-openxlsx::write.xlsx(out, file='results/revision_JASN/Withdrawal_age_race.xlsx')
+openxlsx::write.xlsx(out, file='results/revision_JASN/Withdrawal_age_raceCause.xlsx')
 
 # Median time after index condition to discontinuation ----------------------------------------
 
@@ -376,7 +373,7 @@ map(hosp_postdx_age, ~.x %>%
   spread(agegrp_at_event, median_time) %>%
   mutate(index_condition = transform_indx(index_condition)) %>%
   rename('Index event' = 'index_condition', 'Race' = 'RACE2') %>%
-  openxlsx::write.xlsx(file = 'results/revision_JASN/Time_to_withdrawal.xlsx')
+  openxlsx::write.xlsx(file = 'results/revision_JASN/Time_to_withdrawalCause.xlsx')
 
 
 # Survival analysis on discontinuation --------------------------------------------------------
@@ -405,7 +402,7 @@ for(i in 1:6){
     theme( legend.justification = c(0.5, 0.5))
 }
 
-pdf('graphs/revision_JASN/KaplanMeierPlots.pdf')
+pdf('graphs/revision_JASN/KaplanMeierPlotsCause.pdf')
 for(i in 1:6) print(plt_list[[i]])
 dev.off()
 
@@ -432,7 +429,7 @@ bind_rows(hosp_coxph, .id = 'Index event') %>%
   theme(axis.text.x = element_text(angle = 45, hjust=1)) +
   scale_y_continuous('HR for discontinuation, compared to Whites', breaks = seq(0.4,1.4, by = 0.2))+
   labs(x = '') +
-  ggsave('graphs/revision_JASN/ForestPlot.pdf')
+  ggsave('graphs/revision_JASN/ForestPlotCause.pdf')
 
 bind_rows(hosp_coxph, .id = 'Index event') %>%
   rename(Race = term, HR = estimate, `P-value` = p.value, `95% LCB` = conf.low, `95% UCB` = conf.high) %>% 
@@ -443,7 +440,7 @@ bind_rows(hosp_coxph, .id = 'Index event') %>%
                                    `Index event` == 'dement' ~ 'Dementia',
                                    `Index event` == 'thrive' ~ 'Failure to thrive')) %>% 
   clean_cols(`Index event`) %>% 
-  openxlsx::write.xlsx('results/revision_JASN/CoxPH.xlsx', colWidths = 'auto', 
+  openxlsx::write.xlsx('results/revision_JASN/CoxPHCause.xlsx', colWidths = 'auto', 
                        headerStyle = openxlsx::createStyle(textDecoration = 'BOLD'),
                        overwrite = TRUE)
 
@@ -497,7 +494,7 @@ bl <- modify_depth(cox_models, 2, ~select(., term, estimate) %>%
   map(~bind_rows(.) )
 bl <- map(bl, ~mutate(., term = str_remove(term, 'Race')))
 
-pdf('graphs/revision_JASN/SimulationResults.pdf')
+pdf('graphs/revision_JASN/SimulationResultsCause.pdf')
 for(n in names(bl)){
   print(bl[[n]] %>% ggplot(aes(estimate))+geom_histogram(bins=20) +
           facet_wrap(~term, scales = 'free', nrow = 2)+
@@ -663,7 +660,7 @@ out <- map(out, ~ mutate(., Variables = case_when(Variables == 'agegrp_at_event'
                                                     Variables == 'zscore' ~ 'SES Score',
                                                     TRUE ~ '')) %>% 
              rename(Group = value))
-openxlsx::write.xlsx(out, file = 'results/revision_JASN/WhiteModels.xlsx', 
+openxlsx::write.xlsx(out, file = 'results/revision_JASN/WhiteModelsCause.xlsx', 
                      headerStyle = openxlsx::createStyle(textDecoration = 'BOLD') )
 
 

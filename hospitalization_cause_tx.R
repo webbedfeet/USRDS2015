@@ -33,7 +33,8 @@ tx_freq <- map(hosp_post_dx,
                  select(-n) %>% 
                  filter(cens_type == 2)) %>% 
   bind_rows(.id = 'Condition') %>% 
-  mutate(Condition = condition_code[Condition])
+  mutate(Condition = condition_code[Condition]) %>% 
+  mutate(Percentage = round(Percentage, 2))
 
 
 # munge data for modeling -------------------------------------------------
@@ -67,10 +68,11 @@ events <- c('stroke_primary' = 'Stroke',
             'dement' = "Dementia",
             'thrive' = 'Failure to thrive')
 
-load(path(dropdir, 'revision_JASN','modeling_data.rda'))
-munged_modeling <- map(modeling_data, munge_data)
-save(munged_modeling, file = path(dropdir, 'revision_JASN', 'munged_modeling.rda'), compress = T)
+# load(path(dropdir, 'revision_JASN','modeling_data.rda'))
+# munged_modeling <- map(modeling_data, munge_data)
+# save(munged_modeling, file = path(dropdir, 'revision_JASN', 'munged_modeling.rda'), compress = T)
 
+load(path(dropdir, 'revision_JASN','munged_modeling.rda'))
 # Crude & adjusted models for discontinuation -----------------------------
 fit_list = map(munged_modeling,  ~survfit(Surv(time_from_event2, cens_type==3)~ Race,
                                           data = .))
@@ -153,3 +155,6 @@ tbl2 <- map2(Perc, res_discontinutation, left_join, by=c("Race" = "term")) %>%
   add_blank_rows(.before = which(.$Event != '')[-1]) %>%
   mutate_all(~replace_na(., ''))
 
+openxlsx::write.xlsx(list('Transplant Frequency' = tx_freq, 'Table 2' = tbl2), file = 'results/revision_JASN/no_transplant_results.xlsx',
+                     creator = 'Abhijit Dasgupta',
+                     colWidths = 'auto')

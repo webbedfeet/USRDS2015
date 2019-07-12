@@ -12,6 +12,9 @@ abhiR::reload()
 dropdir <- file.path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
 load(path(dropdir,'revision_JASN', 'modeling_data.rda'))
 
+# file_delete(dir_ls('results/revision_JASN/'))
+# file_delete(dir_ls('graphs/revision_JASN/'))
+
 ## Munge modeling data once here for all the tables
 
 munge_data <- function(d){
@@ -313,7 +316,7 @@ events <- c('stroke_primary' = 'Stroke',
             'thrive' = 'Failure to thrive')
 lbls <- c('Race' = 'Race', 'agegrp_at_event' = 'Age',  'Sex'  = 'Gender',
           'zscore' = 'SES Score', 'Region' = 'Region', 'comorb_indx' = 'Comorbidity',
-          'time_on_dialysis' = 'Time on Dialysis')
+          'time_on_dialysis' = 'Time on Dialysis','ESRD_Cause' = 'Cause of ESRD')
 
 
 bl <- munged_modeling[c('stroke_primary','LuCa','dement','thrive')]
@@ -344,7 +347,7 @@ res_disc <- Reduce(left_join, res_disc) %>% mutate(Variable = format_interval(Va
 openxlsx::write.xlsx(list('Table 1'= tab1, 'Table 2' = tbl2, 'Table 3' = tbl3,
                           'Supplementary Table 1' = results,
                           'Supplementary Table 1a' = res_disc),
-                     file = 'results/revision_JASN/Tables.xlsx',
+                     file = 'results/revision_JASN/TablesCause.xlsx',
                      colWidths = 'auto',
                      creator = "Abhijit Dasgupta")
 
@@ -425,7 +428,7 @@ plt1 <- plot_grid(plt_disc_complete, plt_surv_complete, nrow=1, rel_widths = c(0
 plt <- plt1 %>% 
   plot_grid(bottom, ncol = 1, rel_heights = c(1,0.05)) %>%
   plot_grid(legend_b, ncol = 1, rel_heights = c(1, 0.1))
-ggsave('graphs/revision_JASN/Figure1.pdf', width = 6, height = 8)
+ggsave('graphs/revision_JASN/Figure1Cause.pdf', width = 6, height = 8)
 
 # Figure 2 ------------------------------------------------------------------------------------
 
@@ -501,7 +504,7 @@ ggplot(rbind(bl, data.frame('Event'='Lung cancer', 'estimate' = 1.2, 'Race'='Asi
         axis.ticks.y = element_blank(),
         axis.text.x = element_text(size = 8),
         panel.spacing.x = unit(2, 'lines'))
-ggsave('graphs/revision_JASN/Figure2a.pdf', width = 12, height = 7)
+ggsave('graphs/revision_JASN/Figure2aCause.pdf', width = 12, height = 7)
 
 
 
