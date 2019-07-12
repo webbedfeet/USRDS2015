@@ -1,3 +1,6 @@
+- foreach
+- parallel
+- doParallel
 - abhiR
 - fst
 - fs
