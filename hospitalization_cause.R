@@ -208,6 +208,26 @@ hospitalization <- readRDS(path(dropdir, 'hospitalization_ids.rds'))
 # Dat <- readRDS(path(dropdir,'Analytic.rds'))
 Dat <- read_fst(path(dropdir,'Analytic.fst'))
 
+
+# Fixing the REGION definition --------------------------------------------
+
+library(stringr)
+a1 <- str_pad(as.character(c(23, 50, 33, 25, 09, 36, 42, 44, 34)), 2, pad='0') # Northeast
+a2 <- str_pad(as.character(c(48, 40, 05, 22, 28, 01, 47, 21, 12, 13, 45, 37, 51, 11, 24, 10, 54,78, 72 )), 2, pad='0') # South
+a3 <- str_pad(as.character(c(20, 31, 46, 38, 29, 19, 27, 17, 55, 18, 26, 39)), 2, pad = '0') # Midwest
+a4 <- str_pad(as.character(c(02, 15, 06, 41, 53, 32, 04, 49, 16, 35, 08, 56, 30, 66, 69, 60,64)), 2, pad='0') # West
+
+Dat <- Dat %>%
+  mutate(REGION = case_when(
+    Dat$STATE %in% a1 ~ "Northeast",
+    Dat$STATE %in% a2 ~ 'South',
+    Dat$STATE %in% a3 ~ "Midwest",
+    Dat$STATE %in% a4 ~ "West"
+  ))
+
+
+# Computing survival times ------------------------------------------------
+
 # The following code computes survival date as the minimum of loss-to-followup,
 # discontinuation time, death and transplant date
 Dat <- Dat %>% 

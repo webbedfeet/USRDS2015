@@ -3,7 +3,7 @@
 
 # Setup ---------------------------------------------------------------------------------------
 
-ProjTemplate::reload()
+abhiR::reload()
 dbdir <- verifyPaths(); dir.exists(dbdir)
 dropdir <- file.path(ProjTemplate::find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
 
@@ -123,10 +123,11 @@ Dat <- distinct(Dat)
 
 
 # Update regions
-a1 <- as.character(c(23, 50, 33, 25, 09, 36, 42, 44, 34)) # Northeast
-a2 <- as.character(c(48, 40, 05, 22, 28, 01, 47, 21, 12, 13, 45, 37, 51, 11, 24, 10, 54,78, 72 )) # South
-a3 <- as.character(c(20, 31, 46, 38, 29, 19, 27, 17, 55, 18, 26, 39)) # Midwest
-a4 <- as.character(c(02, 15, 06, 41, 53, 32, 04, 49, 16, 35, 08, 56, 30, 66, 69, 60,64)) # West
+library(stringr)
+a1 <- str_pad(as.character(c(23, 50, 33, 25, 09, 36, 42, 44, 34)), 2, pad='0') # Northeast
+a2 <- str_pad(as.character(c(48, 40, 05, 22, 28, 01, 47, 21, 12, 13, 45, 37, 51, 11, 24, 10, 54,78, 72 )), 2, pad='0') # South
+a3 <- str_pad(as.character(c(20, 31, 46, 38, 29, 19, 27, 17, 55, 18, 26, 39)), 2, pad = '0') # Midwest
+a4 <- str_pad(as.character(c(02, 15, 06, 41, 53, 32, 04, 49, 16, 35, 08, 56, 30, 66, 69, 60,64)), 2, pad='0') # West
 
 Dat <- Dat %>%
   mutate(REGION = case_when(
@@ -312,7 +313,7 @@ Dat <- Dat %>%
 zipses <- haven::read_sas(file.path(dbdir,'2015 Core', 'core','zipses1.sas7bdat'))
 Dat <- Dat %>% left_join(zipses, by=c('ZIPCODE' = 'zipcode'))
 
-saveRDS(Dat, file = 'data/rda/Analytic.rds', compress = T)
+# saveRDS(Dat, file = 'data/rda/Analytic.rds', compress = T)
 saveRDS(Dat, file = file.path(dropdir, 'Analytic.rds'), compress=T)
 # saveRDS(Dat, file = file.path(ProjTemplate::find_dropbox(),'NIAMS','Ward','USRDS2915','data','Analytic.rds'))
 
