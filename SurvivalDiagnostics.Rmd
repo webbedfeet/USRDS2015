@@ -1,0 +1,75 @@
+---
+title: "Diagnostics in survival regression"
+description: |
+  This is a listing/description of various methods to assess the adequacy of fit of 
+  a survival regression model
+author:
+  - name: Abhijit Dasgupta
+    url: https://www.niams.nih.gov/about/directory/abhijit-dasgupta-phd
+    affiliation: NIAMS
+    affiliation_url: https://www.niams.nih.gov/
+date: "`r Sys.Date()`"
+output: distill::distill_article
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+# Cox-Snell residuals
+
+Cox-Snell residuals are essentially an estimate of the cumulative hazard function 
+$$
+H(X) = -\log(S(X))
+$$
+where $S(X)$ is the survival function. This can be used to evaluate overall model fit, since
+under correct specificiation, $H(X)$ follows an exponential distribution with rate 1. So the model fit can be graphically
+evaluated by seeing agreement between the cumulative hazard function of the Cox-Snell Residuals against the actual 
+residuals, which should be linear. One could also consider plotting the Kaplan-Meier curve for these residuals 
+against the exponential distribution with rate 1. 
+
+> Note that if the data is censored, so are the residuals, so Kaplan-Meier is the way to 
+go to accommodate the censoring
+
+## Cox regression
+
+Suppose we are fitting a Cox regression, as 
+
+$$
+\lambda(t) = \lambda_0(t) \exp \left( \beta' X\right)
+$$
+
+then the cumulative hazard function can be written as 
+
+$$
+r_j = \hat{\Lambda}_0(T_j) \exp \left(\hat{\beta}'X_j\right) \quad i=1,\dots,n
+$$
+where we can estimate $\hat{\Lambda}_0(t)$ as 
+$$
+\hat{\Lambda}_0(t) = \sum_{x < t} \frac{dN(x)}{\sum_{i=1}^n Y_i(x)\exp(\hat{\beta}'X)}
+$$
+
+## Weibull regression
+
+The Weibull regression model can be specified as 
+
+$$
+h(t|X) = \alpha \gamma t^{\gamma - 1} \exp(X\beta)
+$$
+which implies that the cumulative hazard function is 
+
+$$
+H(t|x) = \alpha t^\gamma \exp(X\beta)
+$$
+
+This can also be written in AFT format as 
+
+$$ 
+\log(T) = a + Xb + \sigma W
+$$
+where $W$ follows an extreme value distribution.
+# Martingale residuals
+
+
+
