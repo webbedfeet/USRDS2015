@@ -2,7 +2,9 @@
 title: "Simulation Study"
 author: "Abhijit Dasgupta"
 date: "7/12/2019"
-output: html_document
+output: 
+  word_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -23,15 +25,105 @@ the event of interest (since median survival time after discontinuation is 7 day
 ## Implementation
 
 In this simulation
-study, for each patient subgroup based on disease condition (stroke, lung cancer, 
-metastatic cancer, dementia, failure to thrive) we first model the time to discontinuation in Whites as a Weibull regression model,
-with death, loss-to-followup and kidney transplant being censoring events and 
-dialysis discontinuation being the event of interest. The regressors (independent
-variables) are age at the time the disease condition was diagnosed (categorized by decade of age),
-gender, time on dialysis, geographic region (Northeast, Midwest, South and West),
-socio-economic status score, comorbidity index and cause of ESRD (Diabetes, Glumerulonephritis, 
-Hypertension and Other). We validated the fit of these models using Cox-Snell residuals
-and their agreement with a unit exponential distribution, and the models showed adequate fit. 
+study, for each patient subgroup based on disease condition (stroke, lung
+cancer, metastatic cancer, dementia, failure to thrive) we first model the time
+to discontinuation in whites as a Weibull regression model, with death,
+loss-to-followup and kidney transplant being censoring events and dialysis
+discontinuation being the event of interest. We call this model the whites
+model. The regressors (independent variables) are age at the time the disease
+condition was diagnosed (categorized by decade of age), gender, time on
+dialysis, geographic region (Northeast, Midwest, South and West), socio-economic
+status score, comorbidity index and cause of ESRD (Diabetes, Glumerulonephritis,
+Hypertension and Other). The models were fit using the `survreg` function from
+the `survival` package (version 2.44.1.1) in R (version 3.6). Note here that
+even for the same combination of covariate values, different people will
+experience discontinuation at different times; the underlying assumption we make
+is that these times arise from some Weibull distribution (which is a flexible
+family of probability distributions commonly used to model survival times). The
+whites model gives us, for every combination of covariate values, the estimated
+parameters for the Weibull distribution from which the corresponding
+discontinuation time arose. This means that we can simulate discontinuation times
+for any individual based on the whites model by simulating data from the Weibull
+distribution corresponding to the particular combination of covariate values that 
+individual has according to the model.
 
+Let us now consider the data from blacks. Each individual has observed times for
+death, discontinuation, transplant and loss-to-followup (LTF), along with values of 
+each of the measured covariates. For each individual, we replace the observed 
+discontinuation time with a random discontinuation time simulated from the Weibull
+distribution determined from the whites model; this is a simulation of when the individual 
+would have discontinued if he or she behaved like a white person with similar characteristics. We then re-evaluate the individual's status. 
+If the simulated discontinuation time is before the observed death, transplant and LTF times, then
+we record the individual's status as "discontinued"; otherwise we record the status according as whichever
+of the observed death, transplant and LTF times was earliest. This can change 
+individuals' status to "discontinued" from their observed status or change them
+from an observed "discontinued" status to something else, or leave their status unchanged
+compared to what was observed. Correspondingly, the time they are in the study can also change, and
+will be the earliest of observed time of death, simulated time of discontinuation, 
+observed time of transplant and observed LTF time. We repeat this process 1000 times, to 
+allow the variability in the simulated discontinuation times to be expressed
 
+Let's try to understand this with an example. Let's consider a 70 year old black man 
+from the South who never received a transplant and died 5 years after starting dialysis, with 
+some combination of other covariate values. We input his covariate values into the 
+whites model, and get an estimate of the Weibull distribution parameters, from which we
+simulate a discontinuation time of 4.5 years. Since this is earlier than his 
+observed death time of 5 years, within the simulation study his status changes to 
+"discontinued" and his time in the study changes to 4.5 years. The next time, we simulate
+a discontinuation time of 5.2 years, in which case this man's status remains "dead" and 
+his time in the study remains 5 years. We do this 1000 times, each time simulating a new
+discontinuation time based on the whites model and re-assessing his status and time in study. 
 
+For each of the 1000 rounds in the simulation study, we do this process for each individual
+in the black group. We also do the exact same process with each individual in the Asian, Hispanic, 
+and Native American groups. We then pool all the race groups together and fit a Cox regression
+with death or discontinuation as the event of interest and race as the only covariate. This gives us estimated hazard ratios for each race compared to whites, under the simulation condition that
+all individuals behave like similar whites in terms of discontinuation. For a 1000 rounds
+of simulation we get 1000 hazard ratios comparing each of the other races to whites. This
+gives us a distribution of hazard ratios simulated under our condition that all races behave
+just like similar whites with respect to discontinuation. We then compare this distribution
+to the __observed__ hazard ratios comparing each race to whites. If the pattern of 
+discontinuation was not a factor in mortality, we would expect the observed hazard 
+ratios to fall within the distribution of the simulated hazard ratios. However, Figure 2 shows
+that not to be the case for blacks, Hispanics and Asians. 
+
+## Diagnostics
+
+This simulation study depends on whether we have adequately been able to model the
+discontinuation process in whites using our whites model. One way to see the 
+adequacy of model fit in survival models is with Cox-Snell residuals, which should
+follow an Exponential distribution with parameter 1 if the model is a good fit. In 
+the presence of censoring, these residual values are also censored, so we can 
+estimate their distribution using a Kaplan-Meier estimate, and see how well it 
+corresponds to the survival function (1 - the cumulative distribution function) of
+the unit Exponential distribution. The figure below shows the distribution of the 
+Cox-Snell residuals against the exponential distribution (red line), and shows
+adequate fit for each of the disease groups.
+
+```{r,echo=F, message = F, warning=F}
+dropdir <- file.path(ProjTemplate::find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
+abhiR::reload()
+load(file.path(dropdir,'revision_JASN', 'modeling_data.rda'))
+weib_models <- list()
+for (cnd in names(modeling_data2)){
+  D = modeling_data2[[cnd]]
+  weib_models[[cnd]] <- survreg(Surv(time_from_event+0.1, cens_type==3)~ # Added 0.1 since weibull is > 0
+                                  agegrp_at_event + SEX  + time_on_dialysis +
+                                  REGION+
+                                  zscore + comorb_indx + ESRD_Cause,
+                                data = D$White,
+                                dist = 'weibull')
+}
+condition_code <- c('stroke_primary' = 'Primary Stroke',
+                    'stroke_compl' = 'Complicated Stroke',
+                    'LuCa' = 'Lung Cancer',
+                    'MetsCa' = 'Metastatic Cancer',
+                    'dement' = 'Dementia',
+                    'thrive' = 'Failure to thrive'
+                    )
+par(mfrow = c(2,2))
+for(n in c('stroke_primary','LuCa','dement','thrive')){
+  cs <- cox_snell(weib_models[[n]], modeling_data2[[n]]$White)
+  title(main = condition_code[n])
+}
+```
