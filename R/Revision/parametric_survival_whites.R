@@ -29,11 +29,14 @@ analytic_data <- analytic_data %>%
 # Create white subset -----------------------------------------------------
 
 analytic_whites <- analytic_data %>% filter(RACE2 == 'White')
-nrow(analytic_whites)
+assertthat::are_equal(sum(analytic_data$RACE2=='White', na.rm=T), nrow(analytic_whites))
 analytic_whites <- analytic_whites %>% 
   mutate(cens_type2 = case_when(
     cens_type == 0 ~ "Lost to followup",
     cens_type == 1 ~ "Dead",
     cens_type == 2 ~ "Transplant",
     cens_type == 3 ~ "Discontinued",
-    TRUE ~ NA_character_))
+    TRUE ~ NA_character_)) # NA of type character
+
+write_fst(analytic_whites, path(dropdir, 'Analytic_Whites.fst'))
+
