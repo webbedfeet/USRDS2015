@@ -1,0 +1,6 @@
+CONTENTS of project
+
+1. R/Original : Original analysis of USRDS data
+2. R/JASN : Original and revision analyses of the JASN hospitalization paper looking
+at the effect of discontinuation on observed survival in patients with 4 serious conditions
+3. R/Revision : Revision of the original paper
