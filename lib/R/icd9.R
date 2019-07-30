@@ -43,7 +43,7 @@ expand_code <- function(x){
 #' @examples
 #' icd9_codes('410-414, V4581')
 icd9_codes <- function(x){
-  check_string(x)
+  if(!is.character(x)) stop('need entries to be strings')
   short_codes <- str_trim(unlist(str_split(x, ',')))
   codes <- unlist(map(short_codes, expand_code))
   return(codes)
