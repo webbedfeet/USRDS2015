@@ -16,7 +16,11 @@ till2009 <- tbl(sql_conn, 'till2009')
 from2010 <- tbl(sql_conn,'from2010')
 studyids <- tbl(sql_conn, 'StudyIDs')
 
+# "create table hosp1 as select * from till2009 where USRDS_ID in (select USRDS_ID from Whites)"
+# "create table hosp2 as select * from from2010 where USRDS_ID in (select USRDS_ID from Whites)"
 
+hosp1 <- tbl(sql_conn, 'hosp1')
+hosp2 <- tbl(sql_conn, 'hosp2')
 # Fixing the REGION specification -----------------------------------------
 
 a1 <- str_pad(as.character(c(23, 50, 33, 25, 09, 36, 42, 44, 34)), 2, pad='0') # Northeast
