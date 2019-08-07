@@ -95,6 +95,19 @@ analytic_data <- analytic_data %>%
     cens_type == 3 ~ "Discontinued",
     TRUE ~ NA_character_)) # NA of type character
   
+
+# Categorizing BMI --------------------------------------------------------
+
+analytic_data <- analytic_data %>% 
+  mutate(BMI2 = case_when(
+    BMI < 18.5 ~ "Underweight",
+    BMI >= 18.5 & BMI < 25 ~ "Normal",
+    BMI >= 25 & BMI < 30 ~ "Overweight",
+    BMI >= 30 ~ "Obese",
+    TRUE ~ NA_character_
+  )) %>% 
+  mutate(BMI2 = as.factor(BMI2))
+
 # Create white subset -----------------------------------------------------
 
 analytic_whites <- analytic_data %>% filter(RACE2 == 'White')
