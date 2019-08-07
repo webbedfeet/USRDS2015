@@ -108,6 +108,14 @@ analytic_data <- analytic_data %>%
   )) %>% 
   mutate(BMI2 = as.factor(BMI2))
 
+
+# Ensuring factors are factors --------------------------------------------
+
+analytic_data <- 
+  analytic_data %>% 
+  mutate(DRUG = as.factor(DRUG),
+         ALCOH = as.factor(ALCOH))
+
 # Create white subset -----------------------------------------------------
 
 analytic_whites <- analytic_data %>% filter(RACE2 == 'White')
