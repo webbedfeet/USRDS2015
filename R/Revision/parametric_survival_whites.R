@@ -32,6 +32,7 @@ model_template2 <- function(dat){
 }
 
 
+whites_models_p <- map(analytic_whites_byagegrp, model_template)
 whites_models <- map(analytic_whites_byagegrp, model_template2)
 
 
