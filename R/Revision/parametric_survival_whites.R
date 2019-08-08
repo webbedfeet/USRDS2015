@@ -20,13 +20,36 @@ model_template <- function(dat){
   return(m1)
 }
 
-whites_models <- map(analytic_whites_byagegrp, model_template)
+model_template2 <- function(dat){
+  require(rms)
+  m1 <- coxph(Surv(surv_time + 0.1, cens_type==3) ~ 
+                  SEX + factor(REGION) + rcs(zscore) + 
+                  ESRD_Cause +  
+                  Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke + 
+                  DIABETES + ALCOH + DRUG + BMI2, 
+                data = dat)
+  return(m1)
+}
 
 
-CoxSnell <- function(m, d){
-  cs <- -log(1-pweibull(d$surv_time+0.1, shape = 1/m$scale, 
-                        scale = exp(predict(m, d, type = 'lp'))))
-  plot(survfit(Surv(cs, d$cens_type==3)~1))
+whites_models <- map(analytic_whites_byagegrp, model_template2)
+
+
+CoxSnell <- function(m){
+  times <- as.matrix(m$y)[,1]
+  status <- as.matrix(m$y)[,2]
+  cs <- -log(1-pweibull(times, shape = 1/m$scale, 
+                        scale = exp(predict(m, type = 'lp'))))
+  plot(survfit(Surv(cs, status)~1))
   lines(qexp(ppoints(length(cs))), 1- ppoints(length(cs)), col='red')
   return(cs)
+}
+
+CoxSnellPH <- function(m){
+  status <- as.matrix(m$y)[,2]
+  cs = status - resid(m, type='martingale')
+  plot(survfit(Surv(cs, status)~1))
+  lines(qexp(ppoints(length(cs))), 1-ppoints(length(cs)), col='red')
+  return(cs)
+  
 }
