@@ -11,7 +11,7 @@ analytic_whites_byagegrp <- split(analytic_whites, analytic_whites$AGEGRP)
 
 model_template <- function(dat){
   require(rms)
-  m1 <- survreg(Surv(surv_time + 0.1, cens_type==3) ~ 
+  m1 <- survreg(Surv(surv_time + 0.01, cens_type==3) ~ 
               SEX + factor(REGION) + rcs(zscore) + 
               ESRD_Cause +  
               Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke + 
@@ -44,6 +44,14 @@ CoxSnell <- function(m){
   plot(survfit(Surv(cs, status)~1))
   lines(qexp(ppoints(length(cs))), 1- ppoints(length(cs)), col='red')
   return(cs)
+}
+
+CoxSnell2 <- function(m){
+  linFit = predict(m, type='lp')
+  times = as.matrix(m$y)[,1]
+  sderr = (log(times) - linFit)/m$scale
+  csr = -log(exp(-exp(sderr)))
+  return(csr)
 }
 
 CoxSnellPH <- function(m){
