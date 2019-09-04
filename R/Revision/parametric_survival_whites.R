@@ -146,4 +146,6 @@ plots_tr_ln <- map(cs_ln, plot_cs)
 
 final_models_tr <- models1_ln
 
-save(final_models_disc, final_models_tr, file = path(dropdir, 'whites_models_final.rda'))
+save(final_models_disc, final_models_tr, 
+     file = path(dropdir, 'whites_models_final.rda'), 
+     compress = T)
