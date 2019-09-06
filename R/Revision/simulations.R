@@ -35,7 +35,7 @@ scls <- map2(final_models_disc, final_models_tr,
 
 # Inverse CDF for distributions -------------------------------------------
 
-invcdf <- function(u, x){
+invcdf <- function(u, x = 'weibull'){
   case_when(x == 'weibull' ~ log(-log(u)),
             x == 'lognormal' ~ qnorm(u),
             x == 'loglogistic' ~ log(u/(1-u)))
@@ -47,11 +47,42 @@ invcdf <- function(u, x){
 nsim <- 100
 set.seed(10283)
 
+whites_byage <- map(analytic_whites_byagegrp, 
+                    function(d){ d %>% 
+                      select(USRDS_ID,toc:tow, surv_time, cens_type, RACE2) %>% 
+                      mutate(disc = NA, tr = NA, 
+                             new_surv_time = surv_time, new_cens_type = cens_type) 
+                      })
+
+
 ns <- map_int(analytic_rest_byagegrp, nrow)
-Unifs <- map(ns, ~tibble(disc = runif(nsim*.), tr = runif(nsim*.)))
-Es <- pmap(Unifs, final_models_disc, final_models_tr, 
-           function(x, y, z) {
-             x %>% 
-               mutate(disc = invcdf(disc, y$dist),
-                      tr = invcdf(tr, z$dist))
-           })
+
+i <- 1
+
+
+N <- nrow(analytic_rest_byagegrp[[i]])
+unifs <- matrix(runif(N*2), ncol = 2)
+es <- tibble(disc = invcdf(unifs[,1], final_models_disc[[i]]$dist),
+             tr = invcdf(unifs[,2], final_models_tr[[i]]$dist))
+lp <- lps[[i]]
+scl <- tibble(disc = rep(scls[[i]]$disc, nrow(lp)),
+              tr = rep(scls[[i]]$tr, nrow(lp)))
+R <- exp(lp + scl * es)
+dat <- select(analytic_rest_byagegrp[[i]],
+                   USRDS_ID,toc:tow, surv_time, cens_type, RACE2)
+dat <- cbind(dat, R) %>% 
+  mutate(new_surv_time = pmin(toc, tod, disc, tr, na.rm=T)) %>% 
+  mutate(  new_cens_type = case_when(
+           toc == new_surv_time ~ 0, 
+           tod == new_surv_time ~ 1, 
+           tr == new_surv_time ~ 2, 
+           disc == new_surv_time ~ 3
+         )) %>% 
+  mutate(new_surv_time = ifelse(new_cens_type ==3, 
+                                new_surv_time + 7/365.25,
+                                new_surv_time)) %>% 
+  bind_rows(whites_byage[[i]])
+
+
+
+
