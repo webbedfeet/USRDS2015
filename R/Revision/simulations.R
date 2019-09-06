@@ -57,32 +57,58 @@ whites_byage <- map(analytic_whites_byagegrp,
 
 ns <- map_int(analytic_rest_byagegrp, nrow)
 
-i <- 1
-
-
+i <- 3
 N <- nrow(analytic_rest_byagegrp[[i]])
-unifs <- matrix(runif(N*2), ncol = 2)
-es <- tibble(disc = invcdf(unifs[,1], final_models_disc[[i]]$dist),
-             tr = invcdf(unifs[,2], final_models_tr[[i]]$dist))
-lp <- lps[[i]]
-scl <- tibble(disc = rep(scls[[i]]$disc, nrow(lp)),
-              tr = rep(scls[[i]]$tr, nrow(lp)))
-R <- exp(lp + scl * es)
-dat <- select(analytic_rest_byagegrp[[i]],
-                   USRDS_ID,toc:tow, surv_time, cens_type, RACE2)
-dat <- cbind(dat, R) %>% 
-  mutate(new_surv_time = pmin(toc, tod, disc, tr, na.rm=T)) %>% 
-  mutate(  new_cens_type = case_when(
-           toc == new_surv_time ~ 0, 
-           tod == new_surv_time ~ 1, 
-           tr == new_surv_time ~ 2, 
-           disc == new_surv_time ~ 3
-         )) %>% 
-  mutate(new_surv_time = ifelse(new_cens_type ==3, 
-                                new_surv_time + 7/365.25,
-                                new_surv_time)) %>% 
-  bind_rows(whites_byage[[i]])
 
+results <- vector('list', nsim)
 
+for(j in 1:nsim){
+  print(j)
+  unifs <- matrix(runif(N*2), ncol = 2)
+  es <- tibble(disc = invcdf(unifs[,1], final_models_disc[[i]]$dist),
+               tr = invcdf(unifs[,2], final_models_tr[[i]]$dist))
+  lp <- lps[[i]]
+  scl <- tibble(disc = rep(scls[[i]]$disc, nrow(lp)),
+                tr = rep(scls[[i]]$tr, nrow(lp)))
+  R <- exp(lp + scl * es)
+  dat <- select(analytic_rest_byagegrp[[i]],
+                USRDS_ID,toc:tow, surv_time, cens_type, RACE2)
+  dat <- cbind(dat, R) %>% 
+    mutate(new_surv_time = pmin(toc, tod, disc, tr, na.rm=T)) %>% 
+    mutate(  new_cens_type = case_when(
+      toc == new_surv_time ~ 0, 
+      tod == new_surv_time ~ 1, 
+      tr == new_surv_time ~ 2, 
+      disc == new_surv_time ~ 3
+    )) %>% 
+    mutate(new_surv_time = ifelse(new_cens_type ==3, 
+                                  new_surv_time + 7/365.25,
+                                  new_surv_time)) %>% 
+    bind_rows(whites_byage[[i]]) %>% 
+    mutate(RACE2 = fct_relevel(RACE2, 'White', 'Black','Hispanic','Asian')) %>% 
+    filter(RACE2 != 'Other') %>% 
+    mutate(RACE2 = fct_drop(RACE2))
+  
+  mod <- broom::tidy(
+    coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~ RACE2, data = dat)
+  ) %>% 
+    mutate(term = str_remove(term, 'RACE2')) %>% 
+    select(term, estimate) %>% 
+    mutate(estimate = exp(estimate))
+  
+  results[[j]] <- mod
+}
 
+res <- rbindlist(results, idcol='sim')
+
+base <- broom::tidy(
+  coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=dat)
+) %>% 
+  mutate(term = str_remove(term,'RACE2')) %>% 
+  select(term, estimate) %>% 
+  mutate(estimate = exp(estimate))
+
+ggplot(res, aes(x = estimate)) + geom_histogram() + 
+  geom_vline(data=base, aes(xintercept = estimate), color='red') +
+  facet_wrap(~term, scales = 'free')
 
