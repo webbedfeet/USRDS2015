@@ -23,14 +23,16 @@ Cox-Snell residuals are essentially an estimate of the cumulative hazard functio
 $$
 H(X) = -\log(S(X))
 $$
-where $S(X)$ is the survival function. This can be used to evaluate overall model fit, since
-under correct specificiation, $H(X)$ follows an exponential distribution with rate 1. So the model fit can be graphically
-evaluated by seeing agreement between the cumulative hazard function of the Cox-Snell Residuals against the actual 
-residuals, which should be linear. One could also consider plotting the Kaplan-Meier curve for these residuals 
-against the exponential distribution with rate 1. 
+where $S(X)$ is the survival function. This can be used to evaluate overall
+model fit, since under correct specificiation, $H(X)$ follows an exponential
+distribution with rate 1. So the model fit can be graphically evaluated by
+seeing agreement between the cumulative hazard function of the Cox-Snell
+Residuals against the actual residuals, which should be linear. One could also
+consider plotting the Kaplan-Meier curve for these residuals against the
+exponential distribution with rate 1. 
 
 > Note that if the data is censored, so are the residuals, so Kaplan-Meier is the way to 
-go to accommodate the censoring
+go to accommodate the censoring.
 
 ## Cox regression
 
@@ -69,6 +71,7 @@ $$
 \log(T) = a + Xb + \sigma W
 $$
 where $W$ follows an extreme value distribution.
+
 # Martingale residuals
 
 
