@@ -22,6 +22,10 @@ analytic_rest_byagegrp <- split(analytic_rest, analytic_rest$AGEGRP)
 
 load(path(dropdir, 'whites_models_final.rda'))
 
+library(foreach)
+library(parallel)
+library(doParallel)
+no_cores <- detectCores()-1
 
 # Generate linear predictors ----------------------------------------------
 
@@ -44,7 +48,7 @@ invcdf <- function(u, x = 'weibull'){
 
 # Simulate uniforms -------------------------------------------------------
 
-nsim <- 100
+nsim <- 500
 set.seed(10283)
 
 whites_byage <- map(analytic_whites_byagegrp, 
@@ -57,7 +61,7 @@ whites_byage <- map(analytic_whites_byagegrp,
 
 ns <- map_int(analytic_rest_byagegrp, nrow)
 
-i <- 3
+i <- 1
 N <- nrow(analytic_rest_byagegrp[[i]])
 
 results <- vector('list', nsim)
