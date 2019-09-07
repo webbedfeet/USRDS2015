@@ -106,6 +106,27 @@ analytic_data <- analytic_data %>%
     BMI > 30 ~ 'Obese'
   ))
   
+
+# Categorizing BMI --------------------------------------------------------
+
+analytic_data <- analytic_data %>% 
+  mutate(BMI2 = case_when(
+    BMI < 18.5 ~ "Underweight",
+    BMI >= 18.5 & BMI < 25 ~ "Normal",
+    BMI >= 25 & BMI < 30 ~ "Overweight",
+    BMI >= 30 ~ "Obese",
+    TRUE ~ NA_character_
+  )) %>% 
+  mutate(BMI2 = as.factor(BMI2))
+
+
+# Ensuring factors are factors --------------------------------------------
+
+analytic_data <- 
+  analytic_data %>% 
+  mutate(DRUG = as.factor(DRUG),
+         ALCOH = as.factor(ALCOH))
+
 # Create white subset -----------------------------------------------------
 
 analytic_whites <- analytic_data %>% filter(RACE2 == 'White')
