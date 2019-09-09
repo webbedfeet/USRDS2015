@@ -102,9 +102,61 @@ for(i in 1:6){
     # results[[j]] <- mod
   }
 }
-saveRDS(results, file = 'simResults.rds', compress = T)
+names(results) <- names(analytic_rest_byagegrp)
+saveRDS(results, file = path(dropdir,'Revision', 'simResults.rds'), compress = T)
 stopCluster(cl)
 
+
+base <- analytic %>% 
+  nest(-AGEGRP) %>% 
+  mutate(mods = map(data, ~coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=.))) %>% 
+  mutate(results = map(mods, tidy)) %>% 
+  select(AGEGRP, results) %>% 
+  unnest() %>% 
+  select(AGEGRP, term, estimate) %>% 
+  mutate(term = str_remove(term, 'RACE2'),
+         estimate = exp(estimate))
+
+
+
+plt <- map(names(results),
+           ~ggplot(results[[.]], aes(x = estimate)) +
+             # geom_histogram(bins=20) +
+             geom_density()+
+             geom_vline(data = dplyr::filter(base, AGEGRP==.),
+                        aes(xintercept = estimate),
+                        color = 'red') +
+             facet_wrap(~term, scales = 'free') +
+             theme_bw() + 
+             labs(x = 'Hazard ratio against whites',
+                  y = '')
+           )
+
+
+bl <- str_remove_all(names(results), '\\[|\\(|\\]|\\)') %>% 
+  str_split(',') %>% 
+  do.call(rbind,.) %>% 
+  as_tibble() %>% 
+  mutate_all(as.numeric) %>%
+  mutate(V1 = ifelse(V1 %% 10 == 9, V1+1, V1)) %>% 
+  unite('labs',c('V1','V2'), sep = ' - ')
+
+
+for(i in 1:6) plt[[i]] <- plt[[i]] + ggtitle(paste0('Age ',bl$labs[i]))
+
+pdf('graphs/Revision/simResults.pdf')
+for(i in 1:6) print(plt[[i]])
+dev.off()
+
+
+for (nm in names(results)){
+  plt <- ggplot(results[[nm]], aes(x = estimate)) + geom_histogram() +
+    # geom_vline(data = dplyr::filter(base, AGEGRP==nm),
+    #            aes(xintercept = estimate), 
+    #            color = 'red') +
+    facet_wrap(~term, scales='free') +
+    theme_bw()
+}
 # base <- broom::tidy(
 #   coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=dat)
 # ) %>% 
