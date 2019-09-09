@@ -106,6 +106,12 @@ names(results) <- names(analytic_rest_byagegrp)
 saveRDS(results, file = path(dropdir,'Revision', 'simResults.rds'), compress = T)
 stopCluster(cl)
 
+##%######################################################%##
+#                                                          #
+####                       Plots                        ####
+#                                                          #
+##%######################################################%##
+
 
 base <- analytic %>% 
   nest(-AGEGRP) %>% 
@@ -157,14 +163,21 @@ for (nm in names(results)){
     facet_wrap(~term, scales='free') +
     theme_bw()
 }
-# base <- broom::tidy(
-#   coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=dat)
-# ) %>% 
-#   mutate(term = str_remove(term,'RACE2')) %>% 
-#   select(term, estimate) %>% 
-#   mutate(estimate = exp(estimate))
-# 
-# ggplot(res, aes(x = estimate)) + geom_histogram() + 
-#   geom_vline(data=base, aes(xintercept = estimate), color='red') +
-#   facet_wrap(~term, scales = 'free')
 
+##%######################################################%##
+#                                                          #
+####                  Overall estimates                 ####
+#                                                          #
+##%######################################################%##
+
+## We can pool the estimates  by using weighted averages of the age-stratum estimates
+## 
+
+simResults <- readRDS(results, file = path(dropdir,'Revision', 'simResults.rds'))
+N <- analytic %>% count(AGEGRP) %>% mutate(perc = n/sum(n))
+
+hrs <- simResults %>% map(select, estimate) %>% do.call(cbind, .) %>% as.matrix()
+overall <- hrs %*% N$perc
+overall_results <- tibble(term = simResults[[1]]$term, HR = overall[,1])
+
+ggplot(overall_results, aes(x = HR)) + geom_density() + facet_wrap(~term, scales='free')
