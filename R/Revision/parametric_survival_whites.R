@@ -60,7 +60,9 @@ plot_cs <- function(cs){
   require(rms)
   require(broom)
   d <- tidy(npsurv(cs~1))
-  plt <- ggplot(d, aes(time, -log(estimate)))+geom_point() + geom_abline(color='red')
+  plt <- ggplot(d, aes(time, -log(estimate)))+geom_point() + 
+    geom_abline(color='red') + 
+    labs(x = 'Time', y = "Cumulative Hazard")
 
 }
 
@@ -147,3 +149,23 @@ final_models_tr <- models1_ln
 save(final_models_disc, final_models_tr,
      file = path(dropdir, 'whites_models_final.rda'),
      compress = T)
+
+##%######################################################%##
+#                                                          #
+####                     Model fit                      ####
+#                                                          #
+##%######################################################%##
+
+cs_disc <- map(final_models_disc, CoxSnell.psm)
+plts_disc <- map(cs_disc, plot_cs)
+pdf('graphs/Revision/CoxSnellDiscontinuation.pdf')
+cowplot::plot_grid(plotlist = plts_disc, nrow = 3, labels = names(plts_disc), 
+                   label_size = 9) 
+dev.off()
+
+cs_tr <- map(final_models_tr, CoxSnell.psm)
+plts_tr <- map(cs_tr, plot_cs)
+pdf('graphs/Revision/CoxSnellTransplant.pdf')
+cowplot::plot_grid(plotlist = plts_tr, nrow = 3, labels = names(plts_tr),
+                   label_size = 9)
+dev.off()
