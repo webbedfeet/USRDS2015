@@ -27,6 +27,62 @@ library(parallel)
 library(doParallel)
 no_cores <- detectCores()-1
 
+
+# Extract data to compute comorb_indx -------------------------------------
+
+dbdir <- verifyPaths()
+sql_conn <- dbConnect(SQLite(), path(dbdir, 'USRDS.sqlite3'))
+till2009 <- tbl(sql_conn, 'till2009') # hospitalization data
+from2010 <- tbl(sql_conn,'from2010')  # Hospitalization data
+studyids <- tbl(sql_conn, 'StudyIDs') # Study IDs for analytic dataset
+
+comorb_codes <- list(
+  'ASHD' = '410-414, V4581, V4582',
+  'CHF' = '39891, 422, 425, 428, 402X1,404X1, 404X3, V421',
+  'CVATIA' = '430-438',
+  'PVD' = '440-444, 447, 451-453, 557',
+  'Other cardiac' = '420-421, 423-424, 429, 7850-7853,V422,V433',
+  'COPD' = '491-494, 496, 510',
+  'GI Bleeding' = '4560-4562, 5307, 531-534, 56984, 56985,578',
+  'Liver' = '570-571,5721, 5724,5731-5733,V427',
+  'Dysrhhythmia' = '426-427,V450, V533',
+  'Cancer' = '140-172, 174-208, 230-231, 233-234',
+  'Diabetes' = '250, 3572, 3620X, 36641'
+) %>% map(icd9_codes)
+
+d_2009 <- studyids %>% left_join(till2009) %>% 
+  select(USRDS_ID, starts_with('CLM'), starts_with("HSDIAG")) %>% collect(n=Inf)
+d_2010 <- studyids %>% left_join(from2010) %>% 
+  select(USRDS_ID, starts_with('CLM'), starts_with("HSDIAG")) %>% collect(n = Inf)
+
+determine_comorbs <- function(d){
+  d %>% select(USRDS_ID,starts_with("CLM"), starts_with("HSDIAG")) %>% 
+    gather(DIAG, codes, starts_with("HSDIAG")) %>% 
+    bind_cols(as.data.frame(lapply(comorb_codes, function(x) .$codes %in% x))) %>% 
+    group_by(USRDS_ID, CLM_FROM,CLM_THRU) %>% 
+    summarise_at(vars(ASHD:Diabetes), any) %>%
+    ungroup()
+}
+
+comorbs_2009 <- determine_comorbs(d_2009)
+comorbs_2010 <- determine_comorbs(d_2010)
+
+
+blah <- vector('list',2)
+blah[[1]] <- till2009 %>% 
+  select(USRDS_ID, starts_with('CLM'), starts_with('HSDIAG')) %>% 
+  collect(n=Inf) %>% 
+  gather(DIAG, codes, starts_with("HSDIAG")) %>% 
+  bind_cols(as.data.frame(lapply(comorb_codes, function(x) .$codes %in% x))) %>% 
+  select(-DIAG, -codes) %>% 
+  group_by(USRDS_ID, CLM_FROM, CLM_THRU) %>% 
+  summarize_all(any) %>% 
+  ungroup()
+
+  
+
+
+
 # Generate linear predictors ----------------------------------------------
 
 library(rms)
@@ -92,12 +148,14 @@ for(i in 1:6){
       filter(RACE2 != 'Other') %>% 
       mutate(RACE2 = fct_drop(RACE2))
     
-    mod <- broom::tidy(
+    mod1 <- broom::tidy(
       coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~ RACE2, data = dat)
     ) %>% 
       mutate(term = str_remove(term, 'RACE2')) %>% 
       select(term, estimate) %>% 
       mutate(estimate = exp(estimate))
+    
+    
     return(mod)
     # results[[j]] <- mod
   }
