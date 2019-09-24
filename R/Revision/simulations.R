@@ -19,6 +19,7 @@ analytic_whites_byagegrp <- split(analytic_whites, analytic_whites$AGEGRP)
 analytic_rest <- read_fst(path(dropdir, 'Analytic_Rest.fst')) %>% 
   mutate(REGION = factor(REGION))
 analytic_rest_byagegrp <- split(analytic_rest, analytic_rest$AGEGRP)
+analytic <- read_fst(path(dropdir, "Analytic.fst"))
 
 load(path(dropdir, 'whites_models_final.rda'))
 
@@ -231,7 +232,7 @@ for (nm in names(results)){
 ## We can pool the estimates  by using weighted averages of the age-stratum estimates
 ## 
 
-simResults <- readRDS(results, file = path(dropdir,'Revision', 'simResults.rds'))
+simResults <- readRDS(file = path(dropdir,'Revision', 'simResults.rds'))
 N <- analytic %>% count(AGEGRP) %>% mutate(perc = n/sum(n))
 
 hrs <- simResults %>% map(select, estimate) %>% do.call(cbind, .) %>% as.matrix()
@@ -239,3 +240,101 @@ overall <- hrs %*% N$perc
 overall_results <- tibble(term = simResults[[1]]$term, HR = overall[,1])
 
 ggplot(overall_results, aes(x = HR)) + geom_density() + facet_wrap(~term, scales='free')
+
+
+##%######################################################%##
+#                                                          #
+####      Compute comorbidity index for these data      ####
+#                                                          #
+##%######################################################%##
+
+# Compute USRDS comorb score at each hospitalization ----
+# Based on Table 2 of Liu, et al, 
+# Kidney International (2010) 77, 141–151; doi:10.1038/ki.2009.413
+
+# comorb_indx = ASHD + 3*CHF + 
+#   2 * (CVATIA + PVD + Other.cardiac + COPD + 
+#          GI.Bleeding + Liver + Dysrhhythmia + Cancer) +
+#   Diabetes
+
+comorb_codes <- list(
+  'ASHD' = '410-414, V4581, V4582',
+  'CHF' = '39891, 422, 425, 428, 402X1,404X1, 404X3, V421',
+  'CVATIA' = '430-438',
+  'PVD' = '440-444, 447, 451-453, 557',
+  'Other.cardiac' = '420-421, 423-424, 429, 7850-7853,V422,V433',
+  'COPD' = '491-494, 496, 510',
+  'GI.Bleeding' = '4560-4562, 5307, 531-534, 56984, 56985,578',
+  'Liver' = '570-571,5721, 5724,5731-5733,V427',
+  'Dysrhhythmia' = '426-427,V450, V533',
+  'Cancer' = '140-172, 174-208, 230-231, 233-234',
+  'Diabetes' = '250, 3572, 3620X, 36641'
+) %>% map(icd9_codes)
+
+
+# Extract baseline clinical data ------------------------------------------
+# library(RSQLite)
+# library(tidyverse)
+# library(data.table)
+# library(fst)
+# 
+# We moved from the DB method to the fst/data.table method
+# 
+# dbdir = verifyPaths(); dir.exists(dbdir)
+# sql_conn = dbConnect(SQLite(), file.path('data','raw','USRDS.sqlite3'))
+# 
+# query <- "select * from from2010 A join 
+#   (select B.USRDS_ID, min(B.CLM_FROM) as CLM_FROM 
+#   from from2010 B group by B.USRDS_ID) B 
+#   on A.USRDS_ID=B.USRDS_ID and A.CLM_FROM = B.CLM_FROM 
+#   group by A.USRDS_ID;"
+# 
+# baseline_from2010 <- dbGetQuery(sql_conn, query)
+# baseline_till2009 <- dbGetQuery(sql_conn, 
+#                                 str_replace_all(query, 'from2010','till2009'))
+# dbDisconnect(sql_conn)
+# from2010 <- read_fst('data/raw/from2010.fst', as.data.table=T)
+# till2009 <- read_fst('data/raw/till2009.fst', as.data.table=T)
+# setkey(from2010, 'USRDS_ID',"CLM_FROM")
+# setkey(till2009, 'USRDS_ID',"CLM_FROM")
+# baseline_from2010 <- from2010[,.SD[1], by=USRDS_ID]
+# baseline_till2009 <- till2009[,.SD[1], by=USRDS_ID]
+# write_fst(baseline_from2010, path(dropdir, 'baseline2010.rds'), compress=100)
+# write_fst(baseline_till2009, path(dropdir, 'baseline2009.rds'), compress=100)
+
+
+dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
+baseline_till2009 <- read_fst(path(dropdir, 'baseline2009.rds'), as.data.table=T) %>% 
+  lazy_dt() %>% 
+  select(USRDS_ID, CLM_FROM, starts_with("HSDIAG")) %>% as.data.table() 
+baseline_from2010 <- read_fst(path(dropdir, 'baseline2010.rds'), as.data.table=T) %>% 
+  lazy_dt() %>% 
+  select(USRDS_ID, CLM_FROM, starts_with("HSDIAG")) %>% as.data.table()
+
+blah <- rbind(baseline_till2009, baseline_from2010)
+rm(baseline_from2010, baseline_till2009); gc()
+
+for(n in names(comorb_codes)){
+  blah[,n] <- blah$code %in% comorb_codes[[n]]
+}
+
+library(data.table)
+d <- as.data.table(blah %>% select(-diag, -code))
+rm(blah); gc()
+
+d <- d[
+  ,lapply(.SD, sum), by=USRDS_ID
+][
+  ,lapply(.SD, function(x) ifelse(x>0,1,0)), by=USRDS_ID, .SDcols=comorbs
+][
+  ,comorb_indx := ASHD + 3*CHF + 
+    2 * (CVATIA + PVD + Other.cardiac + COPD + 
+    GI.Bleeding + Liver + Dysrhhythmia + Cancer) +
+    Diabetes
+]
+
+analytic_dt <- as.data.table(analytic)
+d <- d[,c('USRDS_ID','comorb_indx')]
+analytic_dt <- d[analytic_dt, on='USRDS_ID']
+
+
