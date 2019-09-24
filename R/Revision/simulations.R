@@ -308,8 +308,26 @@ baseline_till2009 <- read_fst(path(dropdir, 'baseline2009.rds'), as.data.table=T
   lazy_dt() %>% 
   select(USRDS_ID, CLM_FROM, starts_with("HSDIAG")) %>% as.data.table() 
 baseline_from2010 <- read_fst(path(dropdir, 'baseline2010.rds'), as.data.table=T) %>% 
-  lazy_dt() %>% 
+  lazy_dt() %>%
   select(USRDS_ID, CLM_FROM, starts_with("HSDIAG")) %>% as.data.table()
+
+## Identify common individuals in two datasets and ensure single copy of each person
+
+common_ids <- intersect(baseline_till2009$USRDS_ID, baseline_from2010$USRDS_ID)
+tst1 <- baseline_till2009[baseline_till2009$USRDS %in% common_ids,c("USRDS_ID","CLM_FROM")]
+tst2 <- baseline_from2010[baseline_from2010$USRDS %in% common_ids, c("USRDS_ID", "CLM_FROM")]
+bl <- tst2[tst1, on='USRDS_ID'][,ind := i.CLM_FROM < CLM_FROM]
+
+del_2010 = bl$USRDS_ID[bl$ind] # Take these data from the 2009 data
+del_2009 = bl$USRDS_ID[!bl$ind] # Take these data from the 2010 data
+
+baseline_from2010 <- baseline_from2010[!(baseline_from2010$USRDS_ID %in% del_2010)]
+baseline_till2009 <- baseline_till2009[!(baseline_till2009$USRDS_ID %in% del_2009)]
+assert_that(length(intersect(baseline_till2009$USRDS_ID, baseline_from2010$USRDS_ID))==0)
+
+## Melt the data and merge
+
+d1 <- melt(baseline_till2009)
 
 blah <- rbind(baseline_till2009, baseline_from2010)
 rm(baseline_from2010, baseline_till2009); gc()
