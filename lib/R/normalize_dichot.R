@@ -14,6 +14,7 @@
 #' @examples
 normalize_dichot <- function(x, prefer.y=T) {
   x[x==''] <- NA
+  if(all(is.na(x))) return(x)
   if (length(unique(x[!is.na(x)]))==1) {
     return(rep(unique(x[!is.na(x)]), length(x))) # Only one unique value
   }
@@ -22,7 +23,7 @@ normalize_dichot <- function(x, prefer.y=T) {
     if(prefer.y){
       return(rep("Y", length(x)))
     } else{
-    return(as.character(rep(NA, length(x)))) # Both Y and N have same frequency
+      return(as.character(rep(NA, length(x)))) # Both Y and N have same frequency
     }
   }
   prop_y <- mean(x == "Y", na.rm = T)
