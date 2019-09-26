@@ -291,8 +291,11 @@ comorb_codes <- list(
 ## Diabetes = DIABETESÒ
 
 ## Extract COMO_OTHCARD & DYSRYTH from medevid and sync with analytic
+## We'll extract GI.Bleeding and Liver disease from claims data using a 6 month 
+## (180 day) window around the data FIRST_SE, following Liu, et al. 
+## For any of the comorbidities that have missing values, we'll impute a 0 (not present)
 
-sql_conn <- dbConnect(SQLite(), 'data/raw/USRDS.sqlite3')
+sql_conn <- dbConnect(SQLite(), 'data/raw/USRDS.sqlite2')
 new_comorbs <- dbGetQuery(sql_conn,
                           "select USRDS_ID, COMO_OTHCARD, DYSRHYT from medevid")
 sid <- dbReadTable(sql_conn, 'StudyIDs')
