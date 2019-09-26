@@ -324,6 +324,13 @@ till2009 <- setDT(read_fst('data/raw/till2009.fst'))[sid, on='USRDS_ID'][!is.na(
 from2010 <- setDT(read_fst('data/raw/from2010.fst'))[sid, on='USRDS_ID'][!is.na(CLM_FROM)]
 dx_date <- analytic_dt[,c('USRDS_ID','FIRST_SE')]
 
-bl1 <- merge(till2009[,c("USRDS_ID",'CLM_FROM','CLM_THRU')], dx_date, all.x=T, by='USRDS_ID')
-bl2 <- merge(from2010[,c('USRDS_ID','CLM_FROM','CLM_THRU')], dx_date, all.x=T, by='USRDS_ID')
-bl <- rbind(bl1, bl2)
+dat_dx1 <- merge(till2009[,c("USRDS_ID",'CLM_FROM','CLM_THRU')], dx_date, all.x=T, by='USRDS_ID')
+dat_dx2 <- merge(from2010[,c('USRDS_ID','CLM_FROM','CLM_THRU')], dx_date, all.x=T, by='USRDS_ID')
+dat_dx <- rbind(dat_dx1, dat_dx2)
+dat_dx[,':='(CLM_FROM=as.Date(CLM_FROM), CLM_THRU=as.Date(CLM_THRU))]
+setkey(dat_dx, 'USRDS_ID','CLM_FROM')
+dat_dx[, ':='(tt_from = abs(FIRST_SE - CLM_FROM),
+              tt_thru = abs(FIRST_SE - CLM_THRU))][
+                ,min_days := as.numeric(pmin(tt_from, tt_thru))
+              ]
+dat_dx2 <- dat_dx[, .SD[min_days==min(min_days)], by=USRDS_ID]
