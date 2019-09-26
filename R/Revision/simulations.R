@@ -215,68 +215,57 @@ comorb_codes <- list(
 
 
 # Extract baseline clinical data ------------------------------------------
-# library(RSQLite)
-# library(tidyverse)
-# library(data.table)
-# library(fst)
-# 
-# We moved from the DB method to the fst/data.table method
-# 
-# dbdir = verifyPaths(); dir.exists(dbdir)
-# sql_conn = dbConnect(SQLite(), file.path('data','raw','USRDS.sqlite3'))
-# 
-# query <- "select * from from2010 A join 
-#   (select B.USRDS_ID, min(B.CLM_FROM) as CLM_FROM 
-#   from from2010 B group by B.USRDS_ID) B 
-#   on A.USRDS_ID=B.USRDS_ID and A.CLM_FROM = B.CLM_FROM 
-#   group by A.USRDS_ID;"
-# 
-# baseline_from2010 <- dbGetQuery(sql_conn, query)
-# baseline_till2009 <- dbGetQuery(sql_conn, 
-#                                 str_replace_all(query, 'from2010','till2009'))
-# dbDisconnect(sql_conn)
-# from2010 <- read_fst('data/raw/from2010.fst', as.data.table=T)
-# till2009 <- read_fst('data/raw/till2009.fst', as.data.table=T)
-# setkey(from2010, 'USRDS_ID',"CLM_FROM")
-# setkey(till2009, 'USRDS_ID',"CLM_FROM")
-# baseline_from2010 <- from2010[,.SD[1], by=USRDS_ID]
-# baseline_till2009 <- till2009[,.SD[1], by=USRDS_ID]
-# write_fst(baseline_from2010, path(dropdir, 'baseline2010.rds'), compress=100)
-# write_fst(baseline_till2009, path(dropdir, 'baseline2009.rds'), compress=100)
+## We want to compute the comorb_indx at the time of start of dialysis
+## i.e., at FIRST_SE
+## Mapping from existing variables to comorb_indx components
+## Components of comorb_indx
+## 
+## ASHD = IHD | COMO_ASHD = Ihd
+## CHF = CARFAIL | COMO_CHF = Cardia
+## CVATIA = CARFAIL | COMO_CVATIA = Cva 
+## PVD = PVASC | COMO_PVD = Pvasc
+## Other.Cardiac = COMO_OTHCARD
+## COPD = PULMON | COMO_COPD = Pulmon
+## GI.Bleeding
+## Liver
+## Dysrhhythmia = DYSRHYT
+## Cancer = CANCER | COMO_CANC = Cancer
+## Diabetes = DIABETESÒ
 
+## Extract COMO_OTHCARD & DYSRYTH from medevid and sync with analytic
 
-dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
-baseline_till2009 <- read_fst(path(dropdir, 'baseline2009.rds'), as.data.table=T) %>% 
-  lazy_dt() %>% 
-  select(USRDS_ID, CLM_FROM, starts_with("HSDIAG")) %>% as.data.table() 
-baseline_from2010 <- read_fst(path(dropdir, 'baseline2010.rds'), as.data.table=T) %>% 
-  lazy_dt() %>% 
-  select(USRDS_ID, CLM_FROM, starts_with("HSDIAG")) %>% as.data.table()
+sql_conn <- dbConnect(SQLite(), 'data/raw/USRDS.sqlite3')
+new_comorbs <- dbGetQuery(sql_conn,
+                          "select USRDS_ID, COMO_OTHCARD, DYSRHYT from medevid")
+sid <- dbReadTable(sql_conn, 'StudyIDs')
+dbDisconnect(sql_conn)
 
-blah <- rbind(baseline_till2009, baseline_from2010)
-rm(baseline_from2010, baseline_till2009); gc()
+new_comorbs <- semi_join(new_comorbs, sid) # Restrict to analytic subjects
 
-for(n in names(comorb_codes)){
-  blah[,n] <- blah$code %in% comorb_codes[[n]]
-}
+### Normalize to remove duplicate ids
+setDT(new_comorbs)
+bl1 <- new_comorbs[,.N,by=USRDS_ID][N==1][new_comorbs, on="USRDS_ID", nomatch=0]
+bl1[,N := NULL]
+bl1[bl1==''] <- NA
+bl2 <- new_comorbs[, .N, by=USRDS_ID][N>1][new_comorbs, on="USRDS_ID", nomatch =0]
+bl2[,N := NULL]
+bl2[,':='(COMO_OTHCARD=normalize_dichot(COMO_OTHCARD), 
+          DYSRHYT=normalize_dichot(DYSRHYT)),
+    by = USRDS_ID]
+bl2 <- unique(bl2)
+new_como <- rbind(bl1, bl2)
 
-library(data.table)
-d <- as.data.table(blah %>% select(-diag, -code))
-rm(blah); gc()
+analytic_dt <- read_fst(path(dropdir, 'Analytic.fst'), as.data.table = T)
+analytic_dt <- merge(analytic_dt, new_como, by = 'USRDS_ID', all.x=T)
+setDF(analytic_dt)
+analytic_dt <- analytic_dt %>% 
+  mutate_at(vars(Cancer:Pvasc, DIABETES, COMO_OTHCARD, DYSRHYT), function(x) ifelse(x=='Y', 1, 0)) %>% 
+  mutate(comorb_indx = Ihd + 3*Cardia + 2*(Cva + Pvasc + COMO_OTHCARD + Pulmon + Cancer) + DIABETES)
 
-d <- d[
-  ,lapply(.SD, sum), by=USRDS_ID
-][
-  ,lapply(.SD, function(x) ifelse(x>0,1,0)), by=USRDS_ID, .SDcols=comorbs
-][
-  ,comorb_indx := ASHD + 3*CHF + 
-    2 * (CVATIA + PVD + Other.cardiac + COPD + 
-    GI.Bleeding + Liver + Dysrhhythmia + Cancer) +
-    Diabetes
-]
+till2009 <- setDT(read_fst('data/raw/till2009.fst'))[sid, on='USRDS_ID'][!is.na(CLM_FROM)]
+from2010 <- setDT(read_fst('data/raw/from2010.fst'))[sid, on='USRDS_ID'][!is.na(CLM_FROM)]
+dx_date <- analytic_dt[,c('USRDS_ID','FIRST_SE')]
 
-analytic_dt <- as.data.table(analytic)
-d <- d[,c('USRDS_ID','comorb_indx')]
-analytic_dt <- d[analytic_dt, on='USRDS_ID']
-
-
+bl1 <- merge(till2009[,c("USRDS_ID",'CLM_FROM','CLM_THRU')], dx_date, all.x=T, by='USRDS_ID')
+bl2 <- merge(from2010[,c('USRDS_ID','CLM_FROM','CLM_THRU')], dx_date, all.x=T, by='USRDS_ID')
+bl <- rbind(bl1, bl2)
