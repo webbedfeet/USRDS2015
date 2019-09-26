@@ -318,10 +318,6 @@ new_como <- rbind(bl1, bl2)
 
 analytic_dt <- read_fst(path(dropdir, 'Analytic.fst'), as.data.table = T)
 analytic_dt <- merge(analytic_dt, new_como, by = 'USRDS_ID', all.x=T)
-setDF(analytic_dt)
-analytic_dt <- analytic_dt %>%
-  mutate_at(vars(Cancer:Pvasc, DIABETES, COMO_OTHCARD, DYSRHYT), function(x) ifelse(x=='Y', 1, 0)) %>%
-  mutate(comorb_indx = Ihd + 3*Cardia + 2*(Cva + Pvasc + COMO_OTHCARD + Pulmon + Cancer) + DIABETES)
 
 till2009 <- setDT(read_fst('data/raw/till2009.fst'))[sid, on='USRDS_ID'][!is.na(CLM_FROM)]
 from2010 <- setDT(read_fst('data/raw/from2010.fst'))[sid, on='USRDS_ID'][!is.na(CLM_FROM)]
