@@ -11,15 +11,19 @@ analytic_whites <- read_fst(path(dropdir, 'Analytic_Whites.fst')) %>%
   mutate(REGION = factor(REGION))
 analytic_whites_byagegrp <- split(analytic_whites, analytic_whites$AGEGRP)
 
+
 # Modeling ----------------------------------------------------------------
 
+# TODO: Update this with comorbidity index from AnalyticUpdated.fst
+# The current method misses liver disease and GI bleeding
 model_template <- function(dat, dist = 'weibull'){
   require(rms)
   m1 <- survreg(Surv(surv_time + 0.01, cens_type==3) ~
-                  factor(REGION) + rcs(zscore) +
+                  factor(REGION) + SEX*rcs(zscore) +
                   SEX*(ESRD_Cause +  BMI2) +
-                  Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
-                  DIABETES + ALCOH + DRUG + BMI2,
+                  comorb_indx + 
+                  # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
+                  DIABETES + ALCOH + DRUG ,
                 data = dat, dist=dist)
   return(m1)
 }
@@ -29,7 +33,8 @@ model_template_rms <- function(dat, dist = 'weibull'){
   m1 <- psm(Surv(surv_time + 0.01, cens_type==3) ~
                   REGION + SEX*rcs(zscore) +
                   SEX*(ESRD_Cause +  BMI2) +
-                  Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
+                  comorb_indx + 
+                  # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
                   DIABETES + ALCOH + DRUG + BMI2,
                 data = dat, dist=dist, y = T, x = T)
   return(m1)
@@ -102,9 +107,10 @@ plot(survfit(Surv(surv_time, cens_type==3)~AGEGRP, data = analytic_whites))
 model_template_transplants <- function(dat, dist = 'weibull'){
   require(rms)
   m1 <- survreg(Surv(surv_time + 0.01, cens_type==2) ~
-                  factor(REGION) + rcs(zscore) +
+                  factor(REGION) + SEX*rcs(zscore) +
                   SEX*(ESRD_Cause +  BMI2) +
-                  Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
+                  comorb_indx + 
+                  # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
                   DIABETES + ALCOH + DRUG + BMI2,
                 data = dat, dist=dist)
   return(m1)
@@ -115,7 +121,8 @@ model_template_transplants_rms <- function(dat, dist = 'weibull'){
   m1 <- psm(Surv(surv_time + 0.01, cens_type==2) ~
               REGION + SEX*rcs(zscore) +
               SEX*(ESRD_Cause +  BMI2) +
-              Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
+              comorb_indx + 
+              # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
               DIABETES + ALCOH + DRUG + BMI2,
             data = dat, dist=dist, y = T, x = T)
   return(m1)
@@ -150,6 +157,8 @@ save(final_models_disc, final_models_tr,
      file = path(dropdir, 'whites_models_final.rda'),
      compress = T)
 
+# TODO: check fits
+# 
 ##%######################################################%##
 #                                                          #
 ####                     Model fit                      ####

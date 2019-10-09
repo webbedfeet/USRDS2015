@@ -157,7 +157,7 @@ for(i in 1:6){
       mutate(estimate = exp(estimate))
 
 
-    return(mod)
+    return(mod1)
     # results[[j]] <- mod
   }
 }
@@ -272,64 +272,3 @@ comorb_codes <- list(
 ) %>% map(icd9_codes)
 
 
-# Extract baseline clinical data ------------------------------------------
-## We want to compute the comorb_indx at the time of start of dialysis
-## i.e., at FIRST_SE
-## Mapping from existing variables to comorb_indx components
-## Components of comorb_indx
-##
-## ASHD = IHD | COMO_ASHD = Ihd
-## CHF = CARFAIL | COMO_CHF = Cardia
-## CVATIA = CARFAIL | COMO_CVATIA = Cva
-## PVD = PVASC | COMO_PVD = Pvasc
-## Other.Cardiac = COMO_OTHCARD
-## COPD = PULMON | COMO_COPD = Pulmon
-## GI.Bleeding
-## Liver
-## Dysrhhythmia = DYSRHYT
-## Cancer = CANCER | COMO_CANC = Cancer
-## Diabetes = DIABETESÒ
-
-## Extract COMO_OTHCARD & DYSRYTH from medevid and sync with analytic
-## We'll extract GI.Bleeding and Liver disease from claims data using a 6 month 
-## (180 day) window around the data FIRST_SE, following Liu, et al. 
-## For any of the comorbidities that have missing values, we'll impute a 0 (not present)
-
-sql_conn <- dbConnect(SQLite(), 'data/raw/USRDS.sqlite2')
-new_comorbs <- dbGetQuery(sql_conn,
-                          "select USRDS_ID, COMO_OTHCARD, DYSRHYT from medevid")
-sid <- dbReadTable(sql_conn, 'StudyIDs')
-dbDisconnect(sql_conn)
-
-new_comorbs <- semi_join(new_comorbs, sid) # Restrict to analytic subjects
-
-### Normalize to remove duplicate ids
-setDT(new_comorbs)
-bl1 <- new_comorbs[,.N,by=USRDS_ID][N==1][new_comorbs, on="USRDS_ID", nomatch=0]
-bl1[,N := NULL]
-bl1[bl1==''] <- NA
-bl2 <- new_comorbs[, .N, by=USRDS_ID][N>1][new_comorbs, on="USRDS_ID", nomatch =0]
-bl2[,N := NULL]
-bl2[,':='(COMO_OTHCARD=normalize_dichot(COMO_OTHCARD),
-          DYSRHYT=normalize_dichot(DYSRHYT)),
-    by = USRDS_ID]
-bl2 <- unique(bl2)
-new_como <- rbind(bl1, bl2)
-
-analytic_dt <- read_fst(path(dropdir, 'Analytic.fst'), as.data.table = T)
-analytic_dt <- merge(analytic_dt, new_como, by = 'USRDS_ID', all.x=T)
-
-till2009 <- setDT(read_fst('data/raw/till2009.fst'))[sid, on='USRDS_ID'][!is.na(CLM_FROM)]
-from2010 <- setDT(read_fst('data/raw/from2010.fst'))[sid, on='USRDS_ID'][!is.na(CLM_FROM)]
-dx_date <- analytic_dt[,c('USRDS_ID','FIRST_SE')]
-
-dat_dx1 <- merge(till2009[,c("USRDS_ID",'CLM_FROM','CLM_THRU')], dx_date, all.x=T, by='USRDS_ID')
-dat_dx2 <- merge(from2010[,c('USRDS_ID','CLM_FROM','CLM_THRU')], dx_date, all.x=T, by='USRDS_ID')
-dat_dx <- rbind(dat_dx1, dat_dx2)
-dat_dx[,':='(CLM_FROM=as.Date(CLM_FROM), CLM_THRU=as.Date(CLM_THRU))]
-setkey(dat_dx, 'USRDS_ID','CLM_FROM')
-dat_dx[, ':='(tt_from = abs(FIRST_SE - CLM_FROM),
-              tt_thru = abs(FIRST_SE - CLM_THRU))][
-                ,min_days := as.numeric(pmin(tt_from, tt_thru))
-              ]
-dat_dx2 <- dat_dx[, .SD[min_days==min(min_days)], by=USRDS_ID]
