@@ -246,6 +246,12 @@ overall_results <- overall_results %>%
     'Black','Hispanic','Asian','Native American'
   ))
 
+analytic_filt <- analytic %>% 
+  mutate(RACE2 = factor(RACE2)) %>% 
+  mutate(RACE2 = fct_relevel(RACE2, 'White')) %>% 
+  filter(RACE2 != 'Other') %>% 
+  mutate(RACE2 = fct_drop(RACE2, 'Other'))
+
 nominal_model_overall <- 
   coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=analytic_filt) %>% 
   broom::tidy() %>% 
@@ -258,19 +264,19 @@ nominal_model_overall <-
   ))
 
 
-ggplot(overall_results, aes(x = HR, y = ..count../sum(..count..))) + geom_histogram(bins=100) + 
+ggplot(overall_results, aes(x = HR, y = ..count../sum(..count..))) + geom_histogram(bins=500) + 
   geom_segment(data = nominal_model_overall, 
                aes(x = HR, xend=HR, yend = 0, y = 0.03),
                color='red', size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
-  facet_wrap(~term, scales='free_x')
+  facet_wrap(~term) +
+  labs(x = 'Hazard ratio for death or discontinuation
+       compared to Whites',
+       y = 'Relative frequency',
+       title = 'Overall estimates') +
+  theme(strip.text = element_text(face='bold'))
 
 ## Add nominal estimates
 
-analytic_filt <- analytic %>% 
-  mutate(RACE2 = factor(RACE2)) %>% 
-  mutate(RACE2 = fct_relevel(RACE2, 'White')) %>% 
-  filter(RACE2 != 'Other') %>% 
-  mutate(RACE2 = fct_drop(RACE2, 'Other'))
 nominal_model <- analytic_filt %>% 
   group_by(AGEGRP) %>% 
   group_modify(~broom::tidy(coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=.)), 
@@ -285,7 +291,8 @@ nominal_model <- analytic_filt %>%
 
 theme_set(theme_bw())
 names(simResults) <- levels(nominal_model$AGEGRP)
-ag = '[18,29]'
+
+for (ag in names(simResults)){
 d <- simResults[[ag]] %>% 
   mutate(term = fct_relevel(factor(term), 
                             'Black','Hispanic','Asian','Native American'))
@@ -301,7 +308,7 @@ ggplot() + geom_histogram(data=d, aes(x = estimate, y = ..count../sum(..count..)
     strip.text = element_text(face='bold')
   )
 
-
+}
 ##%######################################################%##
 #                                                          #
 ####      Compute comorbidity index for these data      ####
