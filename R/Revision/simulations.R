@@ -292,23 +292,28 @@ nominal_model <- analytic_filt %>%
 theme_set(theme_bw())
 names(simResults) <- levels(nominal_model$AGEGRP)
 
+pdf('AgeSpecificPlots.pdf')
 for (ag in names(simResults)){
 d <- simResults[[ag]] %>% 
   mutate(term = fct_relevel(factor(term), 
                             'Black','Hispanic','Asian','Native American'))
 
-ggplot() + geom_histogram(data=d, aes(x = estimate, y = ..count../sum(..count..)),
+plt <- ggplot() + geom_histogram(data=d, aes(x = estimate, y = ..count../sum(..count..)),
                           bins = 50) + 
   geom_segment(data = nominal_model %>% filter(AGEGRP==ag), 
                aes(x = HR, xend=HR, yend = 0, y = 0.005),
                color='red', size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
   facet_wrap(~term, scales='free_x') +
-  labs(x = 'Hazard ratio compared to Whites', y = '')+
+  labs(x = 'Hazard ratio for death or discontinuation
+       compared to Whites', y = '',
+       title = paste("Age group", ag))+
   theme(
     strip.text = element_text(face='bold')
   )
-
+print(plt)
 }
+dev.off()
+
 ##%######################################################%##
 #                                                          #
 ####      Compute comorbidity index for these data      ####
