@@ -233,13 +233,73 @@ for (nm in names(results)){
 ##
 
 simResults <- readRDS(file = path(dropdir,'Revision', 'simResults.rds'))
+
+
 N <- analytic %>% count(AGEGRP) %>% mutate(perc = n/sum(n))
 
 hrs <- simResults %>% map(select, estimate) %>% do.call(cbind, .) %>% as.matrix()
 overall <- hrs %*% N$perc
 overall_results <- tibble(term = simResults[[1]]$term, HR = overall[,1])
+overall_results <- overall_results %>% 
+  mutate(term = fct_relevel(
+    factor(term),
+    'Black','Hispanic','Asian','Native American'
+  ))
 
-ggplot(overall_results, aes(x = HR)) + geom_density() + facet_wrap(~term, scales='free')
+nominal_model_overall <- 
+  coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=analytic_filt) %>% 
+  broom::tidy() %>% 
+  mutate(term = str_remove(term, 'RACE2'),
+         HR = exp(estimate)) %>% 
+  select(term, HR) %>% 
+  mutate(term = fct_relevel(
+    factor(term),
+    'Black','Hispanic','Asian','Native American'
+  ))
+
+
+ggplot(overall_results, aes(x = HR, y = ..count../sum(..count..))) + geom_histogram(bins=100) + 
+  geom_segment(data = nominal_model_overall, 
+               aes(x = HR, xend=HR, yend = 0, y = 0.03),
+               color='red', size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
+  facet_wrap(~term, scales='free_x')
+
+## Add nominal estimates
+
+analytic_filt <- analytic %>% 
+  mutate(RACE2 = factor(RACE2)) %>% 
+  mutate(RACE2 = fct_relevel(RACE2, 'White')) %>% 
+  filter(RACE2 != 'Other') %>% 
+  mutate(RACE2 = fct_drop(RACE2, 'Other'))
+nominal_model <- analytic_filt %>% 
+  group_by(AGEGRP) %>% 
+  group_modify(~broom::tidy(coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=.)), 
+               keep=T) %>% 
+  mutate(term = str_remove(term, 'RACE2'),
+         HR = exp(estimate)) %>% 
+  select(AGEGRP, term, HR) %>% 
+  mutate(term = fct_relevel(
+    factor(term), 
+    'Black', 'Hispanic','Asian','Native American'))
+
+
+theme_set(theme_bw())
+names(simResults) <- levels(nominal_model$AGEGRP)
+ag = '[18,29]'
+d <- simResults[[ag]] %>% 
+  mutate(term = fct_relevel(factor(term), 
+                            'Black','Hispanic','Asian','Native American'))
+
+ggplot() + geom_histogram(data=d, aes(x = estimate, y = ..count../sum(..count..)),
+                          bins = 50) + 
+  geom_segment(data = nominal_model %>% filter(AGEGRP==ag), 
+               aes(x = HR, xend=HR, yend = 0, y = 0.005),
+               color='red', size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
+  facet_wrap(~term, scales='free_x') +
+  labs(x = 'Hazard ratio compared to Whites', y = '')+
+  theme(
+    strip.text = element_text(face='bold')
+  )
 
 
 ##%######################################################%##
