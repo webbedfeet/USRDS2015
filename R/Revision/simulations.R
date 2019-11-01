@@ -104,7 +104,7 @@ invcdf <- function(u, x = 'weibull'){
 
 
 # Simulate -------------------------------------------------------
-
+## Univariate results
 
 whites_byage <- map(analytic_whites_byagegrp,
                     function(d){ d %>%
@@ -163,6 +163,84 @@ for(i in 1:6){
 }
 names(results) <- names(analytic_rest_byagegrp)
 saveRDS(results, file = path(dropdir,'Revision', 'simResults.rds'), compress = T)
+stopCluster(cl)
+
+## Multivariate results
+
+# REGION + SEX*rcs(zscore) +
+#   SEX*(ESRD_Cause +  BMI2) +
+#   comorb_indx +
+#   # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
+#   DIABETES + ALCOH + DRUG + BMI2,
+
+whites_byage <- map(analytic_whites_byagegrp,
+                    function(d){ d %>%
+                      select(USRDS_ID,toc:tow, surv_time, cens_type, RACE2,
+                             REGION, SEX, zscore, ESRD_Cause, BMI2, comorb_indx,
+                             DIABETES, ALCOH, DRUG) %>%
+                      mutate(disc = NA, tr = NA,
+                             new_surv_time = surv_time, new_cens_type = cens_type)
+                      })
+
+results <- vector('list', 6)
+nsim <- 1000
+set.seed(10283)
+cl <- makeCluster(no_cores)
+registerDoParallel(cl)
+
+for(i in 1:6){
+  print(i)
+  N <- nrow(analytic_rest_byagegrp[[i]])
+  results[[i]] <- foreach(j = 1:nsim, .packages = c('tidyverse', 'broom', 'survival','rms'), .combine=rbind) %dopar% {
+    # print(j)
+    unifs <- matrix(runif(N*2), ncol = 2)
+    es <- tibble(disc = invcdf(unifs[,1], final_models_disc[[i]]$dist),
+                 tr = invcdf(unifs[,2], final_models_tr[[i]]$dist))
+    lp <- lps[[i]]
+    scl <- tibble(disc = rep(scls[[i]]$disc, nrow(lp)),
+                  tr = rep(scls[[i]]$tr, nrow(lp)))
+    R <- exp(lp + scl * es)
+    dat <- select(analytic_rest_byagegrp[[i]],
+                  USRDS_ID,toc:tow, surv_time, cens_type, RACE2,
+                  REGION, SEX, zscore, ESRD_Cause, BMI2, comorb_indx,
+                  DIABETES, ALCOH, DRUG)
+    dat <- cbind(dat, R) %>%
+      mutate(new_surv_time = pmin(toc, tod, disc, tr, na.rm=T)) %>%
+      mutate(  new_cens_type = case_when(
+        toc == new_surv_time ~ 0,
+        tod == new_surv_time ~ 1,
+        tr == new_surv_time ~ 2,
+        disc == new_surv_time ~ 3
+      )) %>%
+      mutate(new_surv_time = ifelse(new_cens_type ==3,
+                                    new_surv_time + 7/365.25,
+                                    new_surv_time)) %>%
+      bind_rows(whites_byage[[i]]) %>%
+      mutate(RACE2 = fct_relevel(RACE2, 'White', 'Black','Hispanic','Asian')) %>%
+      filter(RACE2 != 'Other') %>%
+      mutate(RACE2 = fct_drop(RACE2))
+
+    mod1 <- broom::tidy(
+      coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~ RACE2 +
+              REGION + SEX*rcs(zscore) +
+              SEX*(ESRD_Cause +  BMI2) +
+              comorb_indx +
+              DIABETES + ALCOH + DRUG + BMI2,
+              data = dat)
+    ) %>% 
+      filter(str_detect(term, 'RACE2')) %>% 
+      mutate(term = str_remove(term, 'RACE2')) %>%
+      select(term, estimate) %>%
+      mutate(estimate = exp(estimate))
+
+
+    return(mod1)
+    # results[[j]] <- mod
+  }
+}
+
+names(results) <- names(analytic_rest_byagegrp)
+saveRDS(results, file = path(dropdir,'Revision', 'simResultsMult.rds'), compress = T)
 stopCluster(cl)
 
 ##%######################################################%##
@@ -282,7 +360,6 @@ nominal_model <- analytic_filt %>%
     factor(term), 
     'Black', 'Hispanic','Asian','Native American'))
 
-
 theme_set(theme_bw())
 names(simResults) <- levels(nominal_model$AGEGRP)
 ag = '[18,29]'
@@ -301,6 +378,30 @@ ggplot() + geom_histogram(data=d, aes(x = estimate, y = ..count../sum(..count..)
     strip.text = element_text(face='bold')
   )
 
+simResults_stacked <- bind_rows(simResults, .id='AGEGRP')
+simResults_stacked <- simResults_stacked %>% 
+  mutate(AGEGRP = fct_relevel(AGEGRP, '[18,29]')) %>% 
+  mutate(term = fct_relevel(term, 'Black','Hispanic','Asian'))
+nominal_model <- nominal_model %>% 
+  mutate(estimate = HR)
+
+ggplot(simResults_stacked, 
+       aes(x = estimate, color = term)) + 
+  geom_density() + 
+  geom_vline(xintercept = 1, linetype=2, color = 'red')+
+  geom_segment(data = nominal_model, aes(x = estimate, xend=estimate,
+                                         y = 5, yend = 0,
+                                         color=term),
+                size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
+  facet_grid(AGEGRP ~., scales='free_y', switch='y') +
+  scale_x_continuous('Hazard ratio', breaks = seq(0.4, 1.5, by=0.1))+
+  labs(y = '', color='Race')+
+  theme(strip.text = element_text(size = 14, face = 'bold'),
+        strip.text.y = element_text(angle = 180), # Rotate the y-axis labels
+        strip.background.y = element_rect(fill = 'white'),
+        # strip.placement = 'outside', # Move labels outside the borders
+        axis.text.y=element_blank(),
+        axis.ticks.y = element_blank())
 
 ##%######################################################%##
 #                                                          #
