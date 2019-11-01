@@ -324,6 +324,12 @@ overall_results <- overall_results %>%
     'Black','Hispanic','Asian','Native American'
   ))
 
+analytic_filt <- analytic %>% 
+  mutate(RACE2 = factor(RACE2)) %>% 
+  mutate(RACE2 = fct_relevel(RACE2, 'White')) %>% 
+  filter(RACE2 != 'Other') %>% 
+  mutate(RACE2 = fct_drop(RACE2, 'Other'))
+
 nominal_model_overall <- 
   coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=analytic_filt) %>% 
   broom::tidy() %>% 
@@ -336,19 +342,19 @@ nominal_model_overall <-
   ))
 
 
-ggplot(overall_results, aes(x = HR, y = ..count../sum(..count..))) + geom_histogram(bins=100) + 
+ggplot(overall_results, aes(x = HR, y = ..count../sum(..count..))) + geom_histogram(bins=500) + 
   geom_segment(data = nominal_model_overall, 
                aes(x = HR, xend=HR, yend = 0, y = 0.03),
                color='red', size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
-  facet_wrap(~term, scales='free_x')
+  facet_wrap(~term) +
+  labs(x = 'Hazard ratio for death or discontinuation
+       compared to Whites',
+       y = 'Relative frequency',
+       title = 'Overall estimates') +
+  theme(strip.text = element_text(face='bold'))
 
 ## Add nominal estimates
 
-analytic_filt <- analytic %>% 
-  mutate(RACE2 = factor(RACE2)) %>% 
-  mutate(RACE2 = fct_relevel(RACE2, 'White')) %>% 
-  filter(RACE2 != 'Other') %>% 
-  mutate(RACE2 = fct_drop(RACE2, 'Other'))
 nominal_model <- analytic_filt %>% 
   group_by(AGEGRP) %>% 
   group_modify(~broom::tidy(coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=.)), 
@@ -362,21 +368,26 @@ nominal_model <- analytic_filt %>%
 
 theme_set(theme_bw())
 names(simResults) <- levels(nominal_model$AGEGRP)
-ag = '[18,29]'
+
+pdf('AgeSpecificPlots.pdf')
+for (ag in names(simResults)){
 d <- simResults[[ag]] %>% 
   mutate(term = fct_relevel(factor(term), 
                             'Black','Hispanic','Asian','Native American'))
 
-ggplot() + geom_histogram(data=d, aes(x = estimate, y = ..count../sum(..count..)),
+plt <- ggplot() + geom_histogram(data=d, aes(x = estimate, y = ..count../sum(..count..)),
                           bins = 50) + 
   geom_segment(data = nominal_model %>% filter(AGEGRP==ag), 
                aes(x = HR, xend=HR, yend = 0, y = 0.005),
                color='red', size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
   facet_wrap(~term, scales='free_x') +
-  labs(x = 'Hazard ratio compared to Whites', y = '')+
+  labs(x = 'Hazard ratio for death or discontinuation
+       compared to Whites', y = '',
+       title = paste("Age group", ag))+
   theme(
     strip.text = element_text(face='bold')
   )
+<<<<<<< HEAD
 
 simResults_stacked <- bind_rows(simResults, .id='AGEGRP')
 simResults_stacked <- simResults_stacked %>% 
@@ -402,34 +413,6 @@ ggplot(simResults_stacked,
         # strip.placement = 'outside', # Move labels outside the borders
         axis.text.y=element_blank(),
         axis.ticks.y = element_blank())
-
-##%######################################################%##
-#                                                          #
-####      Compute comorbidity index for these data      ####
-#                                                          #
-##%######################################################%##
-
-# Compute USRDS comorb score at each hospitalization ----
-# Based on Table 2 of Liu, et al,
-# Kidney International (2010) 77, 141–151; doi:10.1038/ki.2009.413
-
-# comorb_indx = ASHD + 3*CHF +
-#   2 * (CVATIA + PVD + Other.cardiac + COPD +
-#          GI.Bleeding + Liver + Dysrhhythmia + Cancer) +
-#   Diabetes
-
-comorb_codes <- list(
-  'ASHD' = '410-414, V4581, V4582',
-  'CHF' = '39891, 422, 425, 428, 402X1,404X1, 404X3, V421',
-  'CVATIA' = '430-438',
-  'PVD' = '440-444, 447, 451-453, 557',
-  'Other.cardiac' = '420-421, 423-424, 429, 7850-7853,V422,V433',
-  'COPD' = '491-494, 496, 510',
-  'GI.Bleeding' = '4560-4562, 5307, 531-534, 56984, 56985,578',
-  'Liver' = '570-571,5721, 5724,5731-5733,V427',
-  'Dysrhhythmia' = '426-427,V450, V533',
-  'Cancer' = '140-172, 174-208, 230-231, 233-234',
-  'Diabetes' = '250, 3572, 3620X, 36641'
-) %>% map(icd9_codes)
-
-
+print(plt)
+}
+dev.off()
