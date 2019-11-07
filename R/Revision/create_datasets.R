@@ -97,17 +97,6 @@ analytic_data <- analytic_data %>%
     TRUE ~ NA_character_)) # NA of type character
 
 
-# Categorize BMI ----------------------------------------------------------
-
-analytic_data <- analytic_data %>% 
-  mutate(BMI2 = case_when(
-    BMI <= 19 ~ 'Underweight',
-    BMI > 19 & BMI <= 25 ~ 'Normal',
-    BMI > 25 & BMI <= 30 ~ 'Overweight',
-    BMI > 30 ~ 'Obese'
-  ))
-  
-
 # Categorizing BMI --------------------------------------------------------
 
 analytic_data <- analytic_data %>% 
@@ -256,6 +245,7 @@ present_codes <- merged_codes[, list(GI = ifelse(any(GI_present),'Y','N'),
 
 analytic_dt <- merge(analytic_dt, present_codes, by = 'USRDS_ID', all.x = TRUE)
 
+# TODO: Fix this code so that all the comorbidities don't devolve to 0
 cmbs <- c('Ihd','Cardia','Cva','Pvasc','COMO_OTHCARD','Pulmon','Cancer','DYSRHYT','GI','Liver', 'DIABETES')
 analytic_dt[, (cmbs) := lapply(.SD, function(x) ifelse(is.na(x), 'N', x)), .SDcols = cmbs]
 analytic_dt[, (cmbs) := lapply(.SD, function(x) ifelse(x=='Y', 1, 0)), .SDcols = cmbs]

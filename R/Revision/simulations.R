@@ -21,12 +21,18 @@ analytic_rest <- read_fst(path(dropdir, 'Analytic_Rest.fst')) %>%
 analytic_rest_byagegrp <- split(analytic_rest, analytic_rest$AGEGRP)
 analytic <- read_fst(path(dropdir, "Analytic.fst"))
 
+analytic_filt <- analytic %>% 
+  mutate(RACE2 = factor(RACE2)) %>% 
+  mutate(RACE2 = fct_relevel(RACE2, 'White')) %>% 
+  filter(RACE2 != 'Other') %>% 
+  mutate(RACE2 = fct_drop(RACE2, 'Other'))
+
 load(path(dropdir, 'whites_models_final.rda'))
 
-library(foreach)
-library(parallel)
-library(doParallel)
-no_cores <- detectCores()-1
+# library(foreach)
+# library(parallel)
+# library(doParallel)
+# no_cores <- detectCores()-1
 
 
 # Extract data to compute comorb_indx -------------------------------------
@@ -240,7 +246,8 @@ for(i in 1:6){
 }
 
 names(results) <- names(analytic_rest_byagegrp)
-saveRDS(results, file = path(dropdir,'Revision', 'simResultsMult.rds'), compress = T)
+saveRDS(results, file = here::here('data','rda','simResultsMult.rds'), compress=T)
+# saveRDS(results, file = path(dropdir,'Revision', 'simResultsMult.rds'), compress = T)
 stopCluster(cl)
 
 ##%######################################################%##
@@ -324,11 +331,7 @@ overall_results <- overall_results %>%
     'Black','Hispanic','Asian','Native American'
   ))
 
-analytic_filt <- analytic %>% 
-  mutate(RACE2 = factor(RACE2)) %>% 
-  mutate(RACE2 = fct_relevel(RACE2, 'White')) %>% 
-  filter(RACE2 != 'Other') %>% 
-  mutate(RACE2 = fct_drop(RACE2, 'Other'))
+
 
 nominal_model_overall <- 
   coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=analytic_filt) %>% 
@@ -387,7 +390,6 @@ plt <- ggplot() + geom_histogram(data=d, aes(x = estimate, y = ..count../sum(..c
   theme(
     strip.text = element_text(face='bold')
   )
-<<<<<<< HEAD
 
 simResults_stacked <- bind_rows(simResults, .id='AGEGRP')
 simResults_stacked <- simResults_stacked %>% 
@@ -416,3 +418,22 @@ ggplot(simResults_stacked,
 print(plt)
 }
 dev.off()
+
+
+
+# Multivariate models -----------------------------------------------------
+
+nominal_model <- analytic_filt %>% 
+  group_by(AGEGRP) %>% 
+  group_modify(~broom::tidy(coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2+
+                                    REGION + SEX*rcs(zscore) +
+                                    SEX*(ESRD_Cause +  BMI2) +
+                                    comorb_indx +
+                                    DIABETES + ALCOH + DRUG + BMI2,, data=.)), 
+               keep=T) %>% 
+  mutate(term = str_remove(term, 'RACE2'),
+         HR = exp(estimate)) %>% 
+  select(AGEGRP, term, HR) %>% 
+  mutate(term = fct_relevel(
+    factor(term), 
+    'Black', 'Hispanic','Asian','Native American'))
