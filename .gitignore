@@ -11,5 +11,5 @@ data/*
 *.log
 2014_15_report_cache/*
 *.xlsx
-
 .ipynb_checkpoints/*
+*.Rproj
