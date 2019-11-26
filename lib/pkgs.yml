@@ -15,7 +15,6 @@
 - openxlsx
 - glue
 - tableone
-- impute-bioC
 - DBI
 - stringr
 - RSQLite
@@ -23,4 +22,5 @@
 - cmprsk
 - rmarkdown
 - haven
+- impute-bioC
 
