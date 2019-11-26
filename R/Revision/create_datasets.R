@@ -4,17 +4,18 @@
 
 abhiR::reload()
 
-dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
+# dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
+dropdir <- "P:/Ward/USRDS2015/data"
 analytic_data <- read_fst(path(dropdir,'Analytic.fst'))
 
-dbdir <- verifyPaths()
+# dbdir <- verifyPaths()
 ## Following paths are for MBP
 sql_conn <- dbConnect(SQLite(), file.path('data','raw','USRDS.sqlite3'))
 
-till2009 <- tbl(sql_conn, 'till2009')
-from2010 <- tbl(sql_conn,'from2010')
-studyids <- tbl(sql_conn, 'StudyIDs')
-analytic <- tbl(sql_conn, 'AnalyticData')
+till2009_db <- tbl(sql_conn, 'till2009')
+from2010_db <- tbl(sql_conn,'from2010')
+studyids_db <- tbl(sql_conn, 'StudyIDs')
+analytic_db <- tbl(sql_conn, 'AnalyticData')
 
 # "create table hosp1 as select * from till2009 where USRDS_ID in (select USRDS_ID from Whites)"
 # "create table hosp2 as select * from from2010 where USRDS_ID in (select USRDS_ID from Whites)"
@@ -34,7 +35,8 @@ analytic_data <- analytic_data %>%
     analytic_data$STATE %in% a2 ~ 'South',
     analytic_data$STATE %in% a3 ~ "Midwest",
     analytic_data$STATE %in% a4 ~ "West"
-  ))
+  )) %>%
+  mutate(REGION = as.factor(REGION))
 
 
 # Adding DISGRPC codes to analytic data --------------------------------------------
@@ -45,7 +47,7 @@ disgrpc <- fst(path(dropdir, 'raw_data.fst'))[,c('USRDS_ID','DISGRPC')] %>%
   left_join(disgrpc_code, by=c('DISGRPC'='Format')) %>%
   mutate(Description = ifelse(Description %in% c('8','**OTHER**'), NA, Description)) %>%
   mutate(Description = fct_other(Description,keep=c('Diabetes','Hypertension','Glomeruloneph.'))) %>%
-  rename(ESRD_Cause = Description) 
+  rename(ESRD_Cause = Description)
 analytic_data <- analytic_data %>% left_join(disgrpc) # Adding reason for dialysis
 
 
@@ -53,42 +55,49 @@ analytic_data <- analytic_data %>% left_join(disgrpc) # Adding reason for dialys
 ## We wil add albumin, alcohol use and drug use to the set of comorbidities,
 ## and we'll utilize BMI and Smoking which are already included
 
-medevid <- studyids %>% left_join(tbl(sql_conn, 'medevid')) %>% 
-  select(USRDS_ID, ALBUM, ALBUMDT, ALBUMLM,ALCOH, DRUG) %>% 
-  collect(n = Inf) %>% 
+medevid <- studyids %>% left_join(tbl(sql_conn, 'medevid')) %>%
+  select(USRDS_ID, ALBUM, ALBUMDT, ALBUMLM,ALCOH, DRUG) %>%
+  collect(n = Inf) %>%
   mutate_at(vars(ALCOH, DRUG), ~ifelse(. == '', NA, .))
-medevid1 <- medevid %>% left_join(analytic_data %>% select(USRDS_ID, FIRST_SE)) %>% 
-  filter_at(vars(ALCOH:DRUG), ~!is.na(.)) %>% 
+medevid1 <- medevid %>% left_join(analytic_data %>% select(USRDS_ID, FIRST_SE)) %>%
+  filter_at(vars(ALCOH:DRUG), ~!is.na(.)) %>% # There are no missings
   mutate(ALBUMDT = as.Date(ALBUMDT),
          time_from_se = abs(FIRST_SE - ALBUMDT))
 bl <- filter(medevid1, !is.na(ALBUM))
+
+## Deal with the situations where an individual has more than one row of data
 bl %>% count(USRDS_ID) %>% filter(n > 1) %>% left_join(bl) -> bl2
-bl2 %>% 
-  mutate_at(vars(ALCOH, DRUG), ~ifelse(.=='Y', 1, 0)) %>% 
-  group_by(USRDS_ID) %>% 
-  filter(time_from_se == min(time_from_se, na.rm=T)) %>% 
+bl2 %>%
+  mutate_at(vars(ALCOH, DRUG), ~ifelse(.=='Y', 1, 0)) %>%
+  group_by(USRDS_ID) %>%
+  filter(time_from_se == min(time_from_se, na.rm=T)) %>% # Grab first dialysis time
   mutate(ALBUM = mean(ALBUM, na.rm=T)) %>%
-  mutate_at(vars(ALCOH, DRUG), ~max(., na.rm=T)) %>% 
-  ungroup() %>% 
+  mutate_at(vars(ALCOH, DRUG), ~max(., na.rm=T)) %>%  # Ever ALCOH or DRUG
+  ungroup() %>%
   select(-ALBUMLM, -ALBUMDT) %>%
   distinct() -> bl3
-medevid1 <- medevid1 %>% 
-  count(USRDS_ID) %>% 
-  filter(n==1) %>% 
-  left_join(medevid1) %>% 
-  select(-ALBUMDT, -ALBUMLM) %>% 
-  mutate_at(vars(ALCOH, DRUG), ~ifelse(.=='Y',1,0)) %>% bind_rows(bl3) %>% 
+
+## Now merge back together with singletons
+medevid1 <- medevid1 %>%
+  count(USRDS_ID) %>%
+  filter(n==1) %>%
+  left_join(medevid1) %>%
+  select(-ALBUMDT, -ALBUMLM) %>%
+  mutate_at(vars(ALCOH, DRUG), ~ifelse(.=='Y',1,0)) %>%
+  bind_rows(bl3) %>%  # <- merge back the flattened duplicates
   select(-n, -time_from_se)
 
+## Missing value evaluation
+
 blah <- analytic_data %>% left_join(medevid1 %>% select(-FIRST_SE))
-blah %>% group_by(lubridate::year(FIRST_SE)) %>% 
+blah %>% group_by(lubridate::year(FIRST_SE)) %>%
   summarize_at(vars(Cancer:Smoke, ALBUM, ALCOH, DRUG), ~mean(is.na(.))*100)
 blah %>% summarize_at(vars(Cancer:Smoke, ALBUM, ALCOH, DRUG), ~sum(is.na(.)))
 
 
 analytic_data <- analytic_data %>% left_join(medevid1 %>% select(-FIRST_SE))
 
-analytic_data <- analytic_data %>% 
+analytic_data <- analytic_data %>%
   mutate(cens_type2 = case_when(
     cens_type == 0 ~ "Lost to followup",
     cens_type == 1 ~ "Dead",
@@ -99,21 +108,21 @@ analytic_data <- analytic_data %>%
 
 # Categorizing BMI --------------------------------------------------------
 
-analytic_data <- analytic_data %>% 
+analytic_data <- analytic_data %>%
   mutate(BMI2 = case_when(
     BMI < 18.5 ~ "Underweight",
     BMI >= 18.5 & BMI < 25 ~ "Normal",
     BMI >= 25 & BMI < 30 ~ "Overweight",
     BMI >= 30 ~ "Obese",
     TRUE ~ NA_character_
-  )) %>% 
+  )) %>%
   mutate(BMI2 = as.factor(BMI2))
 
 
 # Ensuring factors are factors --------------------------------------------
 
-analytic_data <- 
-  analytic_data %>% 
+analytic_data <-
+  analytic_data %>%
   mutate(DRUG = as.factor(DRUG),
          ALCOH = as.factor(ALCOH))
 
@@ -124,8 +133,8 @@ analytic_dt <- as.data.table(analytic_data)
 #                                                          #
 ##%######################################################%##
 
-abhiR::reload()
-dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
+# abhiR::reload()
+# dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
 
 
 ## We want to compute the comorb_indx at the time of start of dialysis
@@ -146,8 +155,8 @@ dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
 ## Diabetes = DIABETESÒ
 
 ## Extract COMO_OTHCARD & DYSRYTH from medevid and sync with analytic
-## We'll extract GI.Bleeding and Liver disease from claims data using a 6 month 
-## (180 day) window around the data FIRST_SE, following Liu, et al. 
+## We'll extract GI.Bleeding and Liver disease from claims data using a 6 month
+## (180 day) window around the data FIRST_SE, following Liu, et al.
 ## For any of the comorbidities that have missing values, we'll impute a 0 (not present)
 
 sql_conn <- dbConnect(SQLite(), 'data/raw/USRDS.sqlite3')
@@ -160,10 +169,10 @@ new_comorbs <- semi_join(new_comorbs, sid) # Restrict to analytic subjects
 
 ### Normalize to remove duplicate ids
 setDT(new_comorbs)
-bl1 <- new_comorbs[,.N,by=USRDS_ID][N==1][new_comorbs, on="USRDS_ID", nomatch=0]
-bl1[,N := NULL]
+bl1 <- new_comorbs[,.N,by=USRDS_ID][N==1][new_comorbs, on="USRDS_ID", nomatch=0] # Keep only singletons
+bl1[,N := NULL] # Remove N
 bl1[bl1==''] <- NA
-bl2 <- new_comorbs[, .N, by=USRDS_ID][N>1][new_comorbs, on="USRDS_ID", nomatch =0]
+bl2 <- new_comorbs[, .N, by=USRDS_ID][N>1][new_comorbs, on="USRDS_ID", nomatch =0] # Work on multiples
 bl2[,N := NULL]
 bl2[,':='(COMO_OTHCARD=normalize_dichot(COMO_OTHCARD),
           DYSRHYT=normalize_dichot(DYSRHYT)),
@@ -192,6 +201,23 @@ comorb_codes <- list(
 
 
 ### I'm reading, then left-joining with study ids, then removing rows with missing values
+### TODO
+sql_conn <- dbConnect(SQLite(), 'data/raw/USRDS.sqlite3')
+d1 <- dbReadTable(sql_conn, 'till2009')
+d2 <- dbReadTable(sql_conn, 'from2010')
+write_fst(d1, path(dropdir, 'till2009.fst'))
+write_fst(d2, path(dropdir, 'from2010.fst'))
+dbDisconnect(sql_conn)
+
+
+bl1 <- till2009_db %>% left_join(studyids_db) %>% filter(!is.na(CLM_FROM))
+bl2 <- from2010_db %>% left_join(studyids_db) %>% filter(!is.na(CLM_FROM))
+d1 <- bl1 %>% select(USRDS_ID, CLM_FROM, CLM_THRU) %>% left_join(studyids_db)
+d2 = bl2 %>% select(USRDS_ID, CLM_FROM, CLM_THRU) %>% left_join(studyids_db)
+dd = union(d1, d2)
+dat_dx = dd %>% collect(n=Inf)
+dat_dx <- dat_dx %>% left_join(analytic_dt %>% select(USRDS_ID, FIRST_SE))
+
 till2009 <- read_fst('data/raw/till2009.fst', as.data.table=T)[sid, on='USRDS_ID'][!is.na(CLM_FROM)]
 from2010 <- read_fst('data/raw/from2010.fst', as.data.table=T)[sid, on='USRDS_ID'][!is.na(CLM_FROM)]
 dx_date <- analytic_dt[,c('USRDS_ID','FIRST_SE'), with=FALSE]
@@ -215,27 +241,27 @@ cols1 <- c('USRDS_ID','CLM_FROM', names(till2009)[str_starts(names(till2009),'HS
 cols2 <- c('USRDS_ID','CLM_FROM', names(from2010)[str_starts(names(from2010), 'HSDIAG')])
 
 # Left joins of the discovered clinical dates with the two clinical databases
-tx1 = merge(dat_dx2[,c('USRDS_ID','CLM_FROM'), with=F], 
-            till2009[,..cols1], by = c('USRDS_ID','CLM_FROM'), 
+tx1 = merge(dat_dx2[,c('USRDS_ID','CLM_FROM'), with=F],
+            till2009[,..cols1], by = c('USRDS_ID','CLM_FROM'),
             all.x=T)[!is.na(HSDIAG1)]
-tx2 = merge(dat_dx2[, c('USRDS_ID','CLM_FROM'), with=F], 
-            from2010[,..cols2], by = c('USRDS_ID', 'CLM_FROM'), 
+tx2 = merge(dat_dx2[, c('USRDS_ID','CLM_FROM'), with=F],
+            from2010[,..cols2], by = c('USRDS_ID', 'CLM_FROM'),
             all.x=T)[!is.na(HSDIAG1)]
 tx1 <- tx1[!USRDS_ID %in% intersect(tx1$USRDS_ID, tx2$USRDS_ID)] # Common id and date pull from tx2
 
 tx1 <- unique(tx1) # Make sure duplicates are removed
 tx2 <- unique(tx2)
 
-# Gather the datasets 
+# Gather the datasets
 tx11 <- melt(tx1, id.vars = c("USRDS_ID", "CLM_FROM"), variable.name = 'diag', value.name='code')
 tx21 <- melt(tx2, id.vars = c('USRDS_ID','CLM_FROM'), variable.name = 'diag', value.name = 'code')
 
 merged_codes <- rbind(tx11, tx21)
-# If there are common ids, make sure the earliest of them is taken, given that all the 
+# If there are common ids, make sure the earliest of them is taken, given that all the
 # visits should be within 180 days of FIRST_SE
-merged_codes <- merged_codes[, .SD[CLM_FROM == min(CLM_FROM)], by=USRDS_ID] 
+merged_codes <- merged_codes[, .SD[CLM_FROM == min(CLM_FROM)], by=USRDS_ID]
 
-## Now match to see if the GI.bleed and liver codes reside here. 
+## Now match to see if the GI.bleed and liver codes reside here.
 
 merged_codes[, ':=' (GI_present = (code %in% comorb_codes$GI.Bleeding),
                      Liver_present= (code %in% comorb_codes$Liver))]
@@ -256,8 +282,8 @@ analytic_dt[, (cmbs) := lapply(.SD, function(x) ifelse(x=='Y', 1, 0)), .SDcols =
 #          GI.Bleeding + Liver + Dysrhhythmia + Cancer) +
 #   Diabetes
 
-analytic_dt[, comorb_indx := Ihd + 3 * Cardia + 
-              2 * (Cva + Pvasc + COMO_OTHCARD + Pulmon + GI + Liver + DYSRHYT + Cancer) + 
+analytic_dt[, comorb_indx := Ihd + 3 * Cardia +
+              2 * (Cva + Pvasc + COMO_OTHCARD + Pulmon + GI + Liver + DYSRHYT + Cancer) +
               DIABETES]
 write_fst(analytic_dt, path(dropdir,'Revision','AnalyticUpdated.fst'))
 
