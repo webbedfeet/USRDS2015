@@ -54,8 +54,8 @@ analytic_data <- analytic_data %>% left_join(disgrpc) # Adding reason for dialys
 # Adding comorbidities ------------------------------------------------
 ## We wil add albumin, alcohol use and drug use to the set of comorbidities,
 ## and we'll utilize BMI and Smoking which are already included
-
-medevid <- studyids %>% left_join(tbl(sql_conn, 'medevid')) %>%
+sql_conn <- dbConnect(SQLite(), 'data/raw/USRDS.sqlite3')
+medevid <- studyids_db %>% left_join(tbl(sql_conn, 'medevid')) %>%
   select(USRDS_ID, ALBUM, ALBUMDT, ALBUMLM,ALCOH, DRUG) %>%
   collect(n = Inf) %>%
   mutate_at(vars(ALCOH, DRUG), ~ifelse(. == '', NA, .))
@@ -199,58 +199,92 @@ comorb_codes <- list(
   'Diabetes' = '250, 3572, 3620X, 36641'
 ) %>% map(icd9_codes)
 
-
+save.image(file='tmp.rda', compress=T)
 ### I'm reading, then left-joining with study ids, then removing rows with missing values
 ### TODO
+
+
 sql_conn <- dbConnect(SQLite(), 'data/raw/USRDS.sqlite3')
-d1 <- dbReadTable(sql_conn, 'till2009')
-d2 <- dbReadTable(sql_conn, 'from2010')
-write_fst(d1, path(dropdir, 'till2009.fst'))
-write_fst(d2, path(dropdir, 'from2010.fst'))
+studyids_db <- tbl(sql_conn, 'StudyIDs')
+till2009_db <- tbl(sql_conn, 'till2009')
+from2010_db <- tbl(sql_conn, 'from2010')
+
+bl1 <- studyids_db %>% left_join(till2009_db) %>% filter(!is.na(CLM_FROM)) %>%
+  select(USRDS_ID, CLM_FROM, CLM_THRU) # Can't put HSDIAG here since there are
+# different numbers of variables in till2009 and from 2010
+
+bl2 <- studyids_db %>% left_join(from2010_db) %>% filter(!is.na(CLM_FROM)) %>%
+  select(USRDS_ID, CLM_FROM, CLM_THRU)
+bl <- union(bl1, bl2) %>% collect(n=Inf)
 dbDisconnect(sql_conn)
+bl <- bl %>% left_join(analytic_dt %>%
+                         mutate(FIRST_SE = as.character(FIRST_SE)) %>%
+                         select(USRDS_ID, FIRST_SE))
+bl <- mutate_if(bl, is.character, as.Date)
+bl <- setDT(bl)
+setkey(bl, 'USRDS_ID','CLM_FROM')
+bl[,':='(tt_from=abs(FIRST_SE-CLM_FROM),
+         tt_thru = abs(FIRST_SE-CLM_THRU))][
+           ,min_days := as.numeric(pmin(tt_from, tt_thru))
+         ]
+dat_dx <- bl
+# This gives the dataset with all clinical visits along with the FIRST_SE
 
-
-bl1 <- till2009_db %>% left_join(studyids_db) %>% filter(!is.na(CLM_FROM))
-bl2 <- from2010_db %>% left_join(studyids_db) %>% filter(!is.na(CLM_FROM))
-d1 <- bl1 %>% select(USRDS_ID, CLM_FROM, CLM_THRU) %>% left_join(studyids_db)
-d2 = bl2 %>% select(USRDS_ID, CLM_FROM, CLM_THRU) %>% left_join(studyids_db)
-dd = union(d1, d2)
-dat_dx = dd %>% collect(n=Inf)
-dat_dx <- dat_dx %>% left_join(analytic_dt %>% select(USRDS_ID, FIRST_SE))
-
-till2009 <- read_fst('data/raw/till2009.fst', as.data.table=T)[sid, on='USRDS_ID'][!is.na(CLM_FROM)]
-from2010 <- read_fst('data/raw/from2010.fst', as.data.table=T)[sid, on='USRDS_ID'][!is.na(CLM_FROM)]
-dx_date <- analytic_dt[,c('USRDS_ID','FIRST_SE'), with=FALSE]
-
-### Merging to get clinical dates and FIRST_SE together
-dat_dx1 <- merge(till2009[,c("USRDS_ID",'CLM_FROM','CLM_THRU')], dx_date, all.x=T, by='USRDS_ID')
-dat_dx2 <- merge(from2010[,c('USRDS_ID','CLM_FROM','CLM_THRU')], dx_date, all.x=T, by='USRDS_ID')
-dat_dx <- rbind(dat_dx1, dat_dx2)
-dat_dx[,':='(CLM_FROM=as.Date(CLM_FROM), CLM_THRU=as.Date(CLM_THRU))]
-setkey(dat_dx, 'USRDS_ID','CLM_FROM')
-dat_dx[, ':='(tt_from = abs(FIRST_SE - CLM_FROM), # Find time from FIRST_SE to clinical visit
-              tt_thru = abs(FIRST_SE - CLM_THRU))][
-                ,min_days := as.numeric(pmin(tt_from, tt_thru))
-                ]
 # Find rows which match with closest clinical visits, and take earliest of them
 dat_dx2 <- dat_dx[, .SD[min_days==min(min_days)], by=USRDS_ID][,.SD[CLM_FROM == min(CLM_FROM)],by=USRDS_ID]
 dat_dx2 <- dat_dx2[min_days < 181, c('USRDS_ID','CLM_FROM','min_days')] # keep those in 180 day window
-dat_dx2[, CLM_FROM := as.character(CLM_FROM)]
+dat_dx2[, CLM_FROM := as.character(CLM_FROM)] # Transform CLM_FROM to character for merges
 
-cols1 <- c('USRDS_ID','CLM_FROM', names(till2009)[str_starts(names(till2009),'HSDIAG')])
-cols2 <- c('USRDS_ID','CLM_FROM', names(from2010)[str_starts(names(from2010), 'HSDIAG')])
+## Now add the diagnoses codes. We need to do this separately for till2009
+## and from2010
 
+sql_conn <- dbConnect(SQLite(), 'data/raw/USRDS.sqlite3')
+till2009_db <- tbl(sql_conn,'till2009')
+from2010_db <- tbl(sql_conn, 'from2010')
+sid <- tbl(sql_conn, 'StudyIDs')
+
+till2009 <- sid %>% left_join(till2009_db) %>%
+  select(USRDS_ID, CLM_FROM, CLM_THRU, starts_with("HSDIAG")) %>%
+  collect(n=Inf)
+from2010 <- sid %>% left_join(from2010_db) %>%
+  select(USRDS_ID, CLM_FROM, CLM_THRU, starts_with("HSDIAG")) %>%
+  collect(n=Inf)
+dbDisconnect(sql_conn)
+
+till2009 <- setDT(till2009)
+from2010 <- setDT(from2010)
+setkey(till2009, 'USRDS_ID','CLM_FROM')
+setkey(from2010, 'USRDS_ID','CLM_FROM')
+setkey(dat_dx2, 'USRDS_ID','CLM_FROM')
+
+## NOTE: The hospital data (till2009 and from2010) only goes till 2013-12-31,
+## while the FIRST_SE data goes till 2014-12-31. This has been verified from the
+## original sas7bdat files.
+##
+save(from2010, till2009, analytic_dt, dat_dx2, file='tmp2.rda', compress=T)
 # Left joins of the discovered clinical dates with the two clinical databases
-tx1 = merge(dat_dx2[,c('USRDS_ID','CLM_FROM'), with=F],
-            till2009[,..cols1], by = c('USRDS_ID','CLM_FROM'),
+# There is an intersection of 1404 IDs between the two merged datasets below.
+# I have confirmed that all the intersection records are duplications in tx2, and
+# not disparate records. So I'll just keep the data from tx1 and filter the
+# common IDs from tx2
+tx1 = merge(dat_dx2,
+            till2009, by = c('USRDS_ID','CLM_FROM'),
             all.x=T)[!is.na(HSDIAG1)]
-tx2 = merge(dat_dx2[, c('USRDS_ID','CLM_FROM'), with=F],
-            from2010[,..cols2], by = c('USRDS_ID', 'CLM_FROM'),
-            all.x=T)[!is.na(HSDIAG1)]
-tx1 <- tx1[!USRDS_ID %in% intersect(tx1$USRDS_ID, tx2$USRDS_ID)] # Common id and date pull from tx2
+tx2 = merge(dat_dx2,
+            from2010, by = c('USRDS_ID', 'CLM_FROM'),
+            all.x=T)[!is.na(HSDIAG1)][!(USRDS_ID %in% tx1$USRDS_ID)]
 
-tx1 <- unique(tx1) # Make sure duplicates are removed
-tx2 <- unique(tx2)
+assertthat::are_equal(length(intersect(tx1$USRDS_ID, tx2$USRDS_ID)),
+                      0)
+tx1 <- unique(tx1); tx2 <- unique(tx2)
+
+## NOTE: There are some IDs with multiple rows in each data set. I have verified
+## that all the multiple rows arise from the same CLM_FROM date and have
+## different CLM_THRU dates. So we're basically looking at the same clinical
+## visit, but with different durations recorded for different diagnoses.
+## For our purposes this won't matter since we will look at the sum total of
+## diagnosis codes for the visit, defined by CLM_FROM
+##
 
 # Gather the datasets
 tx11 <- melt(tx1, id.vars = c("USRDS_ID", "CLM_FROM"), variable.name = 'diag', value.name='code')
