@@ -6,6 +6,7 @@ abhiR::reload()
 
 # dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
 dropdir <- "P:/Ward/USRDS2015/data"
+dir_exists(dropdir)
 analytic_data <- read_fst(path(dropdir,'Analytic.fst'))
 
 # dbdir <- verifyPaths()
@@ -291,24 +292,25 @@ tx11 <- melt(tx1, id.vars = c("USRDS_ID", "CLM_FROM"), variable.name = 'diag', v
 tx21 <- melt(tx2, id.vars = c('USRDS_ID','CLM_FROM'), variable.name = 'diag', value.name = 'code')
 
 merged_codes <- rbind(tx11, tx21)
-# If there are common ids, make sure the earliest of them is taken, given that all the
-# visits should be within 180 days of FIRST_SE
-merged_codes <- merged_codes[, .SD[CLM_FROM == min(CLM_FROM)], by=USRDS_ID]
 
 ## Now match to see if the GI.bleed and liver codes reside here.
 
-merged_codes[, ':=' (GI_present = (code %in% comorb_codes$GI.Bleeding),
+merged_codes[, ':=' (GI_present = (code %in% comorb_codes$`GI Bleeding`),
                      Liver_present= (code %in% comorb_codes$Liver))]
 present_codes <- merged_codes[, list(GI = ifelse(any(GI_present),'Y','N'),
                                      Liver = ifelse(any(Liver_present), 'Y','N')),
                               by=USRDS_ID]
 
 analytic_dt <- merge(analytic_dt, present_codes, by = 'USRDS_ID', all.x = TRUE)
-
+saveRDS(analytic_dt, 'data/Revision/analytic_dt.rds', compress=T)
 # TODO: Fix this code so that all the comorbidities don't devolve to 0
 cmbs <- c('Ihd','Cardia','Cva','Pvasc','COMO_OTHCARD','Pulmon','Cancer','DYSRHYT','GI','Liver', 'DIABETES')
-analytic_dt[, (cmbs) := lapply(.SD, function(x) ifelse(is.na(x), 'N', x)), .SDcols = cmbs]
-analytic_dt[, (cmbs) := lapply(.SD, function(x) ifelse(x=='Y', 1, 0)), .SDcols = cmbs]
+transform_fn <- function(x){
+  if(is.factor(x)) x <- as.character(x) # This is the crucial step
+  x <- ifelse(is.na(x), 'N', x)
+  x <- ifelse(x == 'Y', 1, 0)
+}
+analytic_dt[, (cmbs) := lapply(.SD, transform_fn), .SDcols = cmbs]
 
 # Compute the comorb_indx
 # comorb_indx = ASHD + 3*CHF +
@@ -319,14 +321,16 @@ analytic_dt[, (cmbs) := lapply(.SD, function(x) ifelse(x=='Y', 1, 0)), .SDcols =
 analytic_dt[, comorb_indx := Ihd + 3 * Cardia +
               2 * (Cva + Pvasc + COMO_OTHCARD + Pulmon + GI + Liver + DYSRHYT + Cancer) +
               DIABETES]
-write_fst(analytic_dt, path(dropdir,'Revision','AnalyticUpdated.fst'))
+write_fst(analytic_dt, 'data/Revision/AnalyticUpdated.fst')
+# write_fst(analytic_dt, path(dropdir,'Revision','AnalyticUpdated.fst'))
 
 # Create white subset -----------------------------------------------------
 
 analytic_whites <- analytic_dt[RACE2=='White']
 assertthat::are_equal(sum(analytic_dt$RACE2=='White', na.rm=T), nrow(analytic_whites))
 
-write_fst(analytic_whites, path(dropdir, 'Analytic_Whites.fst'))
+write_fst(analytic_whites, 'data/Revision/Analytic_Whites.fst')
+# write_fst(analytic_whites, path(dropdir, 'Revision','Analytic_Whites.fst'))
 
 
 # Create subset for rest of racial groups for simulation ------------------
