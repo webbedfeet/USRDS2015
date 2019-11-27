@@ -337,5 +337,7 @@ write_fst(analytic_whites, 'data/Revision/Analytic_Whites.fst')
 
 analytic_rest <- analytic_dt[RACE2 != 'White']
 assertthat::are_equal(sum(analytic_dt$RACE2!='White', na.rm=T), nrow(analytic_rest))
-write_fst(analytic_rest, path(dropdir, 'Analytic_Rest.fst'))
+
+write_fst(analytic_rest, 'data/Revision/Analytic_Rest.fst')
+# write_fst(analytic_rest, path(dropdir, 'Revision','Analytic_Rest.fst'))
 
