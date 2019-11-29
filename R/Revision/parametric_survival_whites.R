@@ -175,7 +175,7 @@ dev.off()
 final_models_tr <- models1_ln
 
 save(final_models_disc, final_models_tr,
-     file = path(dropdir, 'whites_models_final.rda'),
+     file = path(dropdir,'Revision', 'whites_models_final.rda'),
      compress = T)
 
 #
