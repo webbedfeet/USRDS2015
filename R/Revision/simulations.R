@@ -39,7 +39,8 @@ load(path(dropdir, 'Revision','whites_models_final.rda'))
 
 # Extract data to compute comorb_indx -------------------------------------
 
-dbdir <- verifyPaths()
+# dbdir <- verifyPaths()
+dbdir <- 'data/raw'
 sql_conn <- dbConnect(SQLite(), path(dbdir, 'USRDS.sqlite3'))
 till2009 <- tbl(sql_conn, 'till2009') # hospitalization data
 from2010 <- tbl(sql_conn,'from2010')  # Hospitalization data
