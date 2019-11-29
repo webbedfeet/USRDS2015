@@ -1,13 +1,15 @@
-# Developing parametric survival models for discontinuation and 
+# Developing parametric survival models for discontinuation and
 # transplant outcomes for the white subgroup
 
 
 # Setup -------------------------------------------------------------------
 
 abhiR::reload()
-dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
+# dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
 
-analytic_whites <- read_fst(path(dropdir, 'Analytic_Whites.fst')) %>%
+dropdir <- 'P:/Ward/USRDS2015/data'
+if(!dir_exists(dropdir)) dropdir <- 'data'
+analytic_whites <- read_fst(path(dropdir, 'Revision', 'Analytic_Whites.fst')) %>%
   mutate(REGION = factor(REGION))
 analytic_whites_byagegrp <- split(analytic_whites, analytic_whites$AGEGRP)
 
@@ -21,7 +23,7 @@ model_template <- function(dat, dist = 'weibull'){
   m1 <- survreg(Surv(surv_time + 0.01, cens_type==3) ~
                   factor(REGION) + SEX*rcs(zscore) +
                   SEX*(ESRD_Cause +  BMI2) +
-                  comorb_indx + 
+                  comorb_indx +
                   # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
                   DIABETES + ALCOH + DRUG ,
                 data = dat, dist=dist)
@@ -31,11 +33,13 @@ model_template <- function(dat, dist = 'weibull'){
 model_template_rms <- function(dat, dist = 'weibull'){
   require(rms)
   m1 <- psm(Surv(surv_time + 0.01, cens_type==3) ~
-                  REGION + SEX*rcs(zscore) +
-                  SEX*(ESRD_Cause +  BMI2) +
-                  comorb_indx + 
-                  # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
-                  DIABETES + ALCOH + DRUG + BMI2,
+              REGION + SEX + zscore +
+              ESRD_Cause +
+              rcs(comorb_indx) +
+              # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
+              DIABETES + ALCOH + DRUG + BMI2 +
+              SEX:BMI2 + SEX:ESRD_Cause + SEX:REGION +
+              SEX*rcs(comorb_indx),
                 data = dat, dist=dist, y = T, x = T)
   return(m1)
 }
@@ -45,17 +49,17 @@ whites_models_weibull <- map(analytic_whites_byagegrp, model_template_rms)
 whites_models_loglogistic <- map(analytic_whites_byagegrp, model_template_rms, dist = 'loglogistic')
 whites_models_lognormal <- map(analytic_whites_byagegrp, model_template_rms, dist = 'lognormal')
 
-CoxSnell.psm <- function(m, plot = F){
-  require(rms)
-  if(!is(m, 'psm')) stop("Model needs to be run using rms::psm")
-  r <- residuals(m)
-  cs <- -log(attr(r,'theoretical')(exp(r[,1]))) # exp for weibull, loglogistic and lognormal
-  if(plot){
-    survd <- broom::tidy(survfit(Surv(cs, r[,2])~1)) # Compute survival curve of censored CS resid
-    ggplot(survd, aes(time, -log(estimate)))+geom_point() + geom_abline(color = 'red')
-  }
-  return(Surv(cs, r[,2]))
-}
+# CoxSnell.psm <- function(m, plot = F){
+#   require(rms)
+#   if(!is(m, 'psm')) stop("Model needs to be run using rms::psm")
+#   r <- residuals(m)
+#   cs <- -log(attr(r,'theoretical')(exp(r[,1]))) # exp for weibull, loglogistic and lognormal
+#   if(plot){
+#     survd <- broom::tidy(survfit(Surv(cs, r[,2])~1)) # Compute survival curve of censored CS resid
+#     ggplot(survd, aes(time, -log(estimate)))+geom_point() + geom_abline(color = 'red')
+#   }
+#   return(Surv(cs, r[,2]))
+# }
 
 cs_weibull <- map(whites_models_weibull, CoxSnell.psm)
 cs_loglogistic <- map(whites_models_loglogistic, CoxSnell.psm)
@@ -65,10 +69,10 @@ plot_cs <- function(cs){
   require(rms)
   require(broom)
   d <- tidy(npsurv(cs~1))
-  plt <- ggplot(d, aes(time, -log(estimate)))+geom_point() + 
-    geom_abline(color='red') + 
+  plt <- ggplot(d, aes(time, -log(estimate)))+geom_point() +
+    geom_abline(color='red') +
     labs(x = 'Time', y = "Cumulative Hazard")
-
+  return(plt)
 }
 
 plot_disc_weib <- map(cs_weibull, plot_cs)
@@ -101,15 +105,15 @@ names(final_models_disc) <- names(whites_models_weibull)
 
 # Exploration -------------------------------------------------------------
 
-plot(survfit(Surv(surv_time, cens_type==3)~AGEGRP, data = analytic_whites))
+plot(survfit(Surv(surv_time, cens_type==2)~AGEGRP, data = analytic_whites))
 ## This appears to show an exponential or weibull-type model will work better
 
 model_template_transplants <- function(dat, dist = 'weibull'){
   require(rms)
   m1 <- survreg(Surv(surv_time + 0.01, cens_type==2) ~
-                  factor(REGION) + SEX*rcs(zscore) +
-                  SEX*(ESRD_Cause +  BMI2) +
-                  comorb_indx + 
+                  factor(REGION) + SEX + rcs(zscore) +
+                  ESRD_Cause +
+                  rcs(comorb_indx) +
                   # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
                   DIABETES + ALCOH + DRUG + BMI2,
                 data = dat, dist=dist)
@@ -119,9 +123,9 @@ model_template_transplants <- function(dat, dist = 'weibull'){
 model_template_transplants_rms <- function(dat, dist = 'weibull'){
   library(rms)
   m1 <- psm(Surv(surv_time + 0.01, cens_type==2) ~
-              REGION + SEX*rcs(zscore) +
-              SEX*(ESRD_Cause +  BMI2) +
-              comorb_indx + 
+              REGION + SEX+ zscore +
+              ESRD_Cause  +
+              rcs(comorb_indx) +
               # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
               DIABETES + ALCOH + DRUG + BMI2,
             data = dat, dist=dist, y = T, x = T)
@@ -158,7 +162,7 @@ save(final_models_disc, final_models_tr,
      compress = T)
 
 # TODO: check fits
-# 
+#
 ##%######################################################%##
 #                                                          #
 ####                     Model fit                      ####
@@ -168,8 +172,8 @@ save(final_models_disc, final_models_tr,
 cs_disc <- map(final_models_disc, CoxSnell.psm)
 plts_disc <- map(cs_disc, plot_cs)
 pdf('graphs/Revision/CoxSnellDiscontinuation.pdf')
-cowplot::plot_grid(plotlist = plts_disc, nrow = 3, labels = names(plts_disc), 
-                   label_size = 9) 
+cowplot::plot_grid(plotlist = plts_disc, nrow = 3, labels = names(plts_disc),
+                   label_size = 9)
 dev.off()
 
 cs_tr <- map(final_models_tr, CoxSnell.psm)

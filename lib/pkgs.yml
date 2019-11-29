@@ -18,9 +18,6 @@
 - DBI
 - stringr
 - RSQLite
-- cowplot
-- cmprsk
 - rmarkdown
-- haven
 - impute-bioC
 
