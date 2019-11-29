@@ -151,9 +151,9 @@ models1_ll <- map(analytic_whites_byagegrp, model_template_transplants_rms, dist
 models1_ln <- map(analytic_whites_byagegrp, model_template_transplants_rms, dist='lognormal')
 
 ## log-normal wins here
-cs_weib <- map(models1_weib, CoxSnell.psm)
-cs_ll <- map(models1_ll, CoxSnell.psm)
-cs_ln <- map(models1_ln, CoxSnell.psm)
+cs_weib <- map(models1_weib, CoxSnell)
+cs_ll <- map(models1_ll, CoxSnell)
+cs_ln <- map(models1_ln, CoxSnell)
 
 plots_tr_weib <- map(cs_weib, plot_cs)
 plots_tr_ll <- map(cs_ll, plot_cs)
@@ -161,7 +161,7 @@ plots_tr_ln <- map(cs_ln, plot_cs)
 
 pdf('graphs/Revision/CSExplore_transplant.pdf')
 for(i in 1:6){
-  print(cowplot::plot_grid(plot_tr_weib[[i]], plot_tr_ln[[i]],plot_tr_ll[[i]], nrow=2))
+  print(cowplot::plot_grid(plots_tr_weib[[i]], plots_tr_ln[[i]],plots_tr_ll[[i]], nrow=2))
 }
 dev.off()
 
@@ -178,7 +178,6 @@ save(final_models_disc, final_models_tr,
      file = path(dropdir, 'whites_models_final.rda'),
      compress = T)
 
-# TODO: check fits
 #
 ##%######################################################%##
 #                                                          #
@@ -186,14 +185,14 @@ save(final_models_disc, final_models_tr,
 #                                                          #
 ##%######################################################%##
 
-cs_disc <- map(final_models_disc, CoxSnell.psm)
+cs_disc <- map(final_models_disc, CoxSnell)
 plts_disc <- map(cs_disc, plot_cs)
 pdf('graphs/Revision/CoxSnellDiscontinuation.pdf')
 cowplot::plot_grid(plotlist = plts_disc, nrow = 3, labels = names(plts_disc),
                    label_size = 9)
 dev.off()
 
-cs_tr <- map(final_models_tr, CoxSnell.psm)
+cs_tr <- map(final_models_tr, CoxSnell)
 plts_tr <- map(cs_tr, plot_cs)
 pdf('graphs/Revision/CoxSnellTransplant.pdf')
 cowplot::plot_grid(plotlist = plts_tr, nrow = 3, labels = names(plts_tr),
