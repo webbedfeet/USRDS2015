@@ -11,23 +11,25 @@
 # Setup -------------------------------------------------------------------
 
 abhiR::reload()
-dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
+# dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
+dropdir <- 'P:/Ward/USRDS2015/data'
+if(!dir_exists(dropdir)) dropdir <- 'data'
 
-analytic_whites <- read_fst(path(dropdir, 'Analytic_Whites.fst')) %>%
+analytic_whites <- read_fst(path(dropdir,'Revision', 'Analytic_Whites.fst')) %>%
   mutate(REGION = factor(REGION))
 analytic_whites_byagegrp <- split(analytic_whites, analytic_whites$AGEGRP)
-analytic_rest <- read_fst(path(dropdir, 'Analytic_Rest.fst')) %>%
+analytic_rest <- read_fst(path(dropdir, 'Revision','Analytic_Rest.fst')) %>%
   mutate(REGION = factor(REGION))
 analytic_rest_byagegrp <- split(analytic_rest, analytic_rest$AGEGRP)
-analytic <- read_fst(path(dropdir, "Analytic.fst"))
+analytic <- read_fst(path(dropdir, 'Revision', "AnalyticUpdated.fst"))
 
-analytic_filt <- analytic %>% 
-  mutate(RACE2 = factor(RACE2)) %>% 
-  mutate(RACE2 = fct_relevel(RACE2, 'White')) %>% 
-  filter(RACE2 != 'Other') %>% 
+analytic_filt <- analytic %>%
+  mutate(RACE2 = factor(RACE2)) %>%
+  mutate(RACE2 = fct_relevel(RACE2, 'White')) %>%
+  filter(RACE2 != 'Other') %>%
   mutate(RACE2 = fct_drop(RACE2, 'Other'))
 
-load(path(dropdir, 'whites_models_final.rda'))
+load(path(dropdir, 'Revision','whites_models_final.rda'))
 
 # library(foreach)
 # library(parallel)
@@ -37,7 +39,8 @@ load(path(dropdir, 'whites_models_final.rda'))
 
 # Extract data to compute comorb_indx -------------------------------------
 
-dbdir <- verifyPaths()
+# dbdir <- verifyPaths()
+dbdir <- 'data/raw'
 sql_conn <- dbConnect(SQLite(), path(dbdir, 'USRDS.sqlite3'))
 till2009 <- tbl(sql_conn, 'till2009') # hospitalization data
 from2010 <- tbl(sql_conn,'from2010')  # Hospitalization data
@@ -233,8 +236,8 @@ for(i in 1:6){
               comorb_indx +
               DIABETES + ALCOH + DRUG + BMI2,
               data = dat)
-    ) %>% 
-      filter(str_detect(term, 'RACE2')) %>% 
+    ) %>%
+      filter(str_detect(term, 'RACE2')) %>%
       mutate(term = str_remove(term, 'RACE2')) %>%
       select(term, estimate) %>%
       mutate(estimate = exp(estimate))
@@ -325,7 +328,7 @@ N <- analytic %>% count(AGEGRP) %>% mutate(perc = n/sum(n))
 hrs <- simResults %>% map(select, estimate) %>% do.call(cbind, .) %>% as.matrix()
 overall <- hrs %*% N$perc
 overall_results <- tibble(term = simResults[[1]]$term, HR = overall[,1])
-overall_results <- overall_results %>% 
+overall_results <- overall_results %>%
   mutate(term = fct_relevel(
     factor(term),
     'Black','Hispanic','Asian','Native American'
@@ -333,20 +336,20 @@ overall_results <- overall_results %>%
 
 
 
-nominal_model_overall <- 
-  coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=analytic_filt) %>% 
-  broom::tidy() %>% 
+nominal_model_overall <-
+  coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=analytic_filt) %>%
+  broom::tidy() %>%
   mutate(term = str_remove(term, 'RACE2'),
-         HR = exp(estimate)) %>% 
-  select(term, HR) %>% 
+         HR = exp(estimate)) %>%
+  select(term, HR) %>%
   mutate(term = fct_relevel(
     factor(term),
     'Black','Hispanic','Asian','Native American'
   ))
 
 
-ggplot(overall_results, aes(x = HR, y = ..count../sum(..count..))) + geom_histogram(bins=500) + 
-  geom_segment(data = nominal_model_overall, 
+ggplot(overall_results, aes(x = HR, y = ..count../sum(..count..))) + geom_histogram(bins=500) +
+  geom_segment(data = nominal_model_overall,
                aes(x = HR, xend=HR, yend = 0, y = 0.03),
                color='red', size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
   facet_wrap(~term) +
@@ -358,15 +361,15 @@ ggplot(overall_results, aes(x = HR, y = ..count../sum(..count..))) + geom_histog
 
 ## Add nominal estimates
 
-nominal_model <- analytic_filt %>% 
-  group_by(AGEGRP) %>% 
-  group_modify(~broom::tidy(coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=.)), 
-               keep=T) %>% 
+nominal_model <- analytic_filt %>%
+  group_by(AGEGRP) %>%
+  group_modify(~broom::tidy(coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=.)),
+               keep=T) %>%
   mutate(term = str_remove(term, 'RACE2'),
-         HR = exp(estimate)) %>% 
-  select(AGEGRP, term, HR) %>% 
+         HR = exp(estimate)) %>%
+  select(AGEGRP, term, HR) %>%
   mutate(term = fct_relevel(
-    factor(term), 
+    factor(term),
     'Black', 'Hispanic','Asian','Native American'))
 
 theme_set(theme_bw())
@@ -374,13 +377,13 @@ names(simResults) <- levels(nominal_model$AGEGRP)
 
 pdf('AgeSpecificPlots.pdf')
 for (ag in names(simResults)){
-d <- simResults[[ag]] %>% 
-  mutate(term = fct_relevel(factor(term), 
+d <- simResults[[ag]] %>%
+  mutate(term = fct_relevel(factor(term),
                             'Black','Hispanic','Asian','Native American'))
 
 plt <- ggplot() + geom_histogram(data=d, aes(x = estimate, y = ..count../sum(..count..)),
-                          bins = 50) + 
-  geom_segment(data = nominal_model %>% filter(AGEGRP==ag), 
+                          bins = 50) +
+  geom_segment(data = nominal_model %>% filter(AGEGRP==ag),
                aes(x = HR, xend=HR, yend = 0, y = 0.005),
                color='red', size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
   facet_wrap(~term, scales='free_x') +
@@ -392,15 +395,15 @@ plt <- ggplot() + geom_histogram(data=d, aes(x = estimate, y = ..count../sum(..c
   )
 
 simResults_stacked <- bind_rows(simResults, .id='AGEGRP')
-simResults_stacked <- simResults_stacked %>% 
-  mutate(AGEGRP = fct_relevel(AGEGRP, '[18,29]')) %>% 
+simResults_stacked <- simResults_stacked %>%
+  mutate(AGEGRP = fct_relevel(AGEGRP, '[18,29]')) %>%
   mutate(term = fct_relevel(term, 'Black','Hispanic','Asian'))
-nominal_model <- nominal_model %>% 
+nominal_model <- nominal_model %>%
   mutate(estimate = HR)
 
-ggplot(simResults_stacked, 
-       aes(x = estimate, color = term)) + 
-  geom_density() + 
+ggplot(simResults_stacked,
+       aes(x = estimate, color = term)) +
+  geom_density() +
   geom_vline(xintercept = 1, linetype=2, color = 'red')+
   geom_segment(data = nominal_model, aes(x = estimate, xend=estimate,
                                          y = 5, yend = 0,
@@ -423,17 +426,17 @@ dev.off()
 
 # Multivariate models -----------------------------------------------------
 
-nominal_model <- analytic_filt %>% 
-  group_by(AGEGRP) %>% 
+nominal_model <- analytic_filt %>%
+  group_by(AGEGRP) %>%
   group_modify(~broom::tidy(coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2+
                                     REGION + SEX*rcs(zscore) +
                                     SEX*(ESRD_Cause +  BMI2) +
                                     comorb_indx +
-                                    DIABETES + ALCOH + DRUG + BMI2,, data=.)), 
-               keep=T) %>% 
+                                    DIABETES + ALCOH + DRUG + BMI2,, data=.)),
+               keep=T) %>%
   mutate(term = str_remove(term, 'RACE2'),
-         HR = exp(estimate)) %>% 
-  select(AGEGRP, term, HR) %>% 
+         HR = exp(estimate)) %>%
+  select(AGEGRP, term, HR) %>%
   mutate(term = fct_relevel(
-    factor(term), 
+    factor(term),
     'Black', 'Hispanic','Asian','Native American'))
