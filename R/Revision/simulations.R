@@ -59,7 +59,9 @@ invcdf <- function(u, x = 'weibull'){
 
 
 # Simulate -------------------------------------------------------
-## Univariate results
+
+# Univariate simulation results -------------------------------------------
+
 
 whites_byage <- map(analytic_whites_byagegrp,
                     function(d){ d %>%
@@ -120,7 +122,9 @@ names(results) <- names(analytic_rest_byagegrp)
 saveRDS(results, file = path(dropdir,'Revision', 'simResults.rds'), compress = T)
 stopCluster(cl)
 
-## Multivariate results
+
+# Multivariate simulation results -----------------------------------------
+
 
 # REGION + SEX*rcs(zscore) +
 #   SEX*(ESRD_Cause +  BMI2) +
@@ -177,7 +181,7 @@ for(i in 1:6){
 
     mod1 <- broom::tidy(
       coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~
-              REGION + SEX + rcs(zscore) +
+              RACE2 + REGION + SEX + rcs(zscore) +
               ESRD_Cause +
               rcs(comorb_indx) +
               # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
@@ -228,7 +232,7 @@ base <- analytic_filt %>%
 base2 <- analytic_filt %>%
   nest(-AGEGRP) %>%
   mutate(mods = map(data, ~coxph(Surv(surv_time, cens_type %in% c(1,3))~
-                                   REGION + SEX + rcs(zscore) +
+                                   RACE2 + REGION + SEX + rcs(zscore) +
                                    ESRD_Cause +
                                    rcs(comorb_indx) +
                                    # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
