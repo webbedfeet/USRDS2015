@@ -31,10 +31,10 @@ analytic_filt <- analytic %>%
 
 load(path(dropdir, 'Revision','whites_models_final.rda'))
 
-# library(foreach)
-# library(parallel)
-# library(doParallel)
-# no_cores <- detectCores()-1
+library(foreach)
+library(parallel)
+library(doParallel)
+no_cores <- detectCores()-1
 
 
 
@@ -88,7 +88,7 @@ for(i in 1:6){
     R <- exp(lp + scl * es)
     dat <- select(analytic_rest_byagegrp[[i]],
                   USRDS_ID,toc:tow, surv_time, cens_type, RACE2)
-    dat <- cbind(dat, R) %>%
+    dat <- cbind(dat, R) %>% # append white counterfactual times to non-white data
       mutate(new_surv_time = pmin(toc, tod, disc, tr, na.rm=T)) %>%
       mutate(  new_cens_type = case_when(
         toc == new_surv_time ~ 0,
@@ -97,9 +97,9 @@ for(i in 1:6){
         disc == new_surv_time ~ 3
       )) %>%
       mutate(new_surv_time = ifelse(new_cens_type ==3,
-                                    new_surv_time + 7/365.25,
+                                    new_surv_time + 7/365.25, # death is 7 days after discontinuation
                                     new_surv_time)) %>%
-      bind_rows(whites_byage[[i]]) %>%
+      bind_rows(whites_byage[[i]]) %>% # Add on the white data
       mutate(RACE2 = fct_relevel(RACE2, 'White', 'Black','Hispanic','Asian')) %>%
       filter(RACE2 != 'Other') %>%
       mutate(RACE2 = fct_drop(RACE2))
@@ -176,11 +176,15 @@ for(i in 1:6){
       mutate(RACE2 = fct_drop(RACE2))
 
     mod1 <- broom::tidy(
-      coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~ RACE2 +
-              REGION + SEX*rcs(zscore) +
-              SEX*(ESRD_Cause +  BMI2) +
-              comorb_indx +
-              DIABETES + ALCOH + DRUG + BMI2,
+      coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~
+              REGION + SEX + rcs(zscore) +
+              ESRD_Cause +
+              rcs(comorb_indx) +
+              # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
+              DIABETES + ALCOH + DRUG + BMI2 +
+              SEX:DIABETES + SEX:ALCOH + SEX:DRUG +
+              SEX:BMI2 + SEX:ESRD_Cause + SEX:REGION +
+              SEX*rcs(comorb_indx),
               data = dat)
     ) %>%
       filter(str_detect(term, 'RACE2')) %>%
@@ -195,8 +199,12 @@ for(i in 1:6){
 }
 
 names(results) <- names(analytic_rest_byagegrp)
-saveRDS(results, file = here::here('data','rda','simResultsMult.rds'), compress=T)
-# saveRDS(results, file = path(dropdir,'Revision', 'simResultsMult.rds'), compress = T)
+# saveRDS(results,
+#         file = here::here('data','rda','simResultsMult.rds'),
+#         compress=T)
+saveRDS(results,
+        file = path(dropdir,'Revision', 'simResultsMult.rds'),
+        compress = T)
 stopCluster(cl)
 
 ##%######################################################%##
@@ -205,8 +213,9 @@ stopCluster(cl)
 #                                                          #
 ##%######################################################%##
 
+results <- readRDS(path(dropdir, 'Revision', 'simResults.rds'))
 
-base <- analytic %>%
+base <- analytic_filt %>%
   nest(-AGEGRP) %>%
   mutate(mods = map(data, ~coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=.))) %>%
   mutate(results = map(mods, tidy)) %>%
@@ -216,6 +225,21 @@ base <- analytic %>%
   mutate(term = str_remove(term, 'RACE2'),
          estimate = exp(estimate))
 
+base2 <- analytic_filt %>%
+  nest(-AGEGRP) %>%
+  mutate(mods = map(data, ~coxph(Surv(surv_time, cens_type %in% c(1,3))~
+                                   REGION + SEX + rcs(zscore) +
+                                   ESRD_Cause +
+                                   rcs(comorb_indx) +
+                                   # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
+                                   DIABETES + ALCOH + DRUG + BMI2 +
+                                   SEX:DIABETES + SEX:ALCOH + SEX:DRUG +
+                                   SEX:BMI2 + SEX:ESRD_Cause + SEX:REGION +
+                                   SEX*rcs(comorb_indx),
+                               data=.))) %>%
+  mutate(results = map(mods, tidy)) %>%
+  select(AGEGRP, results) %>%
+  unnest()
 
 
 plt <- map(names(results),
@@ -374,11 +398,15 @@ dev.off()
 
 nominal_model <- analytic_filt %>%
   group_by(AGEGRP) %>%
-  group_modify(~broom::tidy(coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2+
-                                    REGION + SEX*rcs(zscore) +
-                                    SEX*(ESRD_Cause +  BMI2) +
-                                    comorb_indx +
-                                    DIABETES + ALCOH + DRUG + BMI2,, data=.)),
+  group_modify(~broom::tidy(coxph(Surv(surv_time, cens_type %in% c(1,3))~
+                                    REGION + SEX + rcs(zscore) +
+                                    ESRD_Cause +
+                                    rcs(comorb_indx) +
+                                    # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
+                                    DIABETES + ALCOH + DRUG + BMI2 +
+                                    SEX:DIABETES + SEX:ALCOH + SEX:DRUG +
+                                    SEX:BMI2 + SEX:ESRD_Cause + SEX:REGION +
+                                    SEX*rcs(comorb_indx), data=.)),
                keep=T) %>%
   mutate(term = str_remove(term, 'RACE2'),
          HR = exp(estimate)) %>%
