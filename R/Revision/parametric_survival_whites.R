@@ -198,3 +198,23 @@ pdf('graphs/Revision/CoxSnellTransplant.pdf')
 cowplot::plot_grid(plotlist = plts_tr, nrow = 3, labels = names(plts_tr),
                    label_size = 9)
 dev.off()
+
+
+# Cox-Snell final models --------------------------------------------------
+
+load(path(dropdir,'Revision', 'whites_models_final.rda'))
+cs_disc <- map(final_models_disc, CoxSnell)
+cs_tr <- map(final_models_tr, CoxSnell)
+plots_disc <- map(cs_disc, plot_cs)
+plots_tr <- map(cs_tr, plot_cs)
+
+pdf('graphs/Revision/CoxSnellDiscontinuation.pdf')
+for(i in 1:length(plots_disc)){
+  print(plots_disc[[i]])
+}
+dev.off()
+pdf('graphs/Revision/CoxSnellTransplant.pdf')
+for(i in 1:length(plots_tr)){
+  print(plots_tr[[i]])
+}
+dev.off()
