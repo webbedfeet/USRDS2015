@@ -107,6 +107,19 @@ plt2 <- map(names(results2), function(n1){ # List of plots by age groups
 )
 
 ## Re-format the age groups into hyphenated expressions
+## We'll create a function
+
+agegrp_label <- function(agegrp){
+  bl <- agegrp %>% str_match_all('\\d+') %>%
+    map(~as.numeric(t(.))) %>%
+    do.call(rbind,.) %>%
+    as_tibble() %>%
+    mutate(V1 = ifelse(V1 %% 10 == 9, V1+1, V1)) %>%
+    unite(labs, c("V1",'V2'), sep = ' - ') %>%
+    pull(labs)
+  return(bl)
+}
+
 bl <- names(results) %>% str_match_all('\\d+') %>%
   map(~as.numeric(t(.))) %>%
   do.call(rbind, .) %>%
@@ -191,37 +204,84 @@ for (ag in names(simResults2)){
     geom_segment(data = nominal_model_mult %>% filter(AGEGRP==ag),
                  aes(x = HR, xend=HR, yend = 0, y = 0.005),
                  color='red', size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
-    facet_wrap(~term, scales='free_x') +
+    facet_wrap(~term, scales='free_y') +
     labs(x = 'Hazard ratio for death or discontinuation
        compared to Whites', y = '',
          title = paste("Age group", ag))+
     theme(strip.text = element_text(face='bold'))
 
-  simResults_stacked2 <- bind_rows(simResults2, .id='AGEGRP')
-  simResults_stacked2 <- simResults_stacked2 %>%
-    mutate(AGEGRP = fct_relevel(AGEGRP, '[18,29]')) %>%
-    mutate(term = fct_relevel(term, 'Black','Hispanic','Asian'))
-  nominal_model_mult <- nominal_model_mult %>%
-    mutate(estimate = HR)
-
-  ggplot(simResults_stacked2,
-         aes(x = estimate, color = term)) +
-    geom_density() +
-    geom_vline(xintercept = 1, linetype=2, color = 'red')+
-    geom_segment(data = nominal_model_mult, aes(x = estimate, xend=estimate,
-                                           y = 5, yend = 0,
-                                           color=term),
-                 size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
-    facet_grid(AGEGRP ~., scales='free_y', switch='y') +
-    scale_x_continuous('Hazard ratio', breaks = seq(0.4, 1.5, by=0.1))+
-    labs(y = '', color='Race')+
-    theme(strip.text = element_text(size = 14, face = 'bold'),
-          strip.text.y = element_text(angle = 180), # Rotate the y-axis labels
-          strip.background.y = element_rect(fill = 'white'),
-          # strip.placement = 'outside', # Move labels outside the borders
-          axis.text.y=element_blank(),
-          axis.ticks.y = element_blank())
   print(plt)
 }
 dev.off()
 
+
+# Strips for looking at ethnicities by age group --------------------------
+
+
+simResults_stacked2 <- bind_rows(simResults2, .id = 'AGEGRP')
+simResults_stacked2 <- simResults_stacked2 %>%
+  mutate(AGEGRP = agegrp_label(as.character(AGEGRP))) %>%
+  mutate(AGEGRP = fct_relevel(factor(AGEGRP), '18 - 29')) %>%
+  mutate(term = fct_relevel(term, 'Black', 'Hispanic', 'Asian'))
+nominal_model_mult <- nominal_model_mult %>%
+  mutate(estimate = HR) %>%
+  mutate(AGEGRP = agegrp_label(as.character(AGEGRP))) %>%
+  mutate(AGEGRP = fct_relevel(factor(AGEGRP), '18 - 29'))
+
+
+
+ggplot(simResults_stacked2,
+       aes(x = estimate, fill = term, color=term)) +
+  geom_histogram(alpha=0.2, bins=50) +
+  geom_vline(xintercept = 1,
+             linetype = 2,
+             color = 'red') +
+  geom_segment(
+    data = nominal_model_mult,
+    aes(
+      x = estimate,
+      xend = estimate,
+      y = 5,
+      yend = 0,
+      color = term
+    ),
+    size = 1.5,
+    arrow = arrow(length = unit(.2, 'cm'))
+  ) +
+  facet_grid(AGEGRP ~ ., scales = 'free_y', switch = 'y') +
+  scale_x_continuous('Hazard ratio compared to whites', breaks = seq(0.4, 1.5, by = 0.1)) +
+  labs(y = '', fill = 'Race') +
+  theme_classic()+
+  theme(
+    strip.text = element_text(size = 12, face = 'bold'),
+    strip.text.y = element_text(angle = 180),
+    # Rotate the y-axis labels
+    strip.background.y = element_rect(fill = 'white'),
+    # strip.placement = 'outside', # Move labels outside the borders
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.text.x = element_text(size = 12, face='bold'),
+    axis.title.x = element_text(size = 15, face = 'bold')
+  ) +
+  scale_color_discrete(guide = 'none')
+ggsave('graphs/Revision/AgeSpecificStripMult.pdf')
+
+
+# Cox-Snell final models --------------------------------------------------
+
+load(path(dropdir,'Revision', 'whites_models_final.rda'))
+cs_disc <- map(final_models_disc, CoxSnell)
+cs_tr <- map(final_models_tr, CoxSnell)
+plots_disc <- map(cs_disc, plot_cs)
+plots_tr <- map(cs_tr, plot_cs)
+
+pdf('graphs/Revision/CoxSnellDiscontinuation.pdf')
+for(i in 1:length(plots_disc)){
+  print(plots_disc[[i]])
+}
+dev.off()
+pdf('graphs/Revision/CoxSnellTransplant.pdf')
+for(i in 1:length(plots_tr)){
+  print(plots_tr[[i]])
+}
+dev.off()
