@@ -116,135 +116,18 @@ bl <- names(results) %>% str_match_all('\\d+') %>%
 
 
 for(i in 1:6) {
-  plt[[i]] <- plt[[i]] + ggtitle(paste0('Age ',bl$labs[i]))
   plt2[[i]] <- plt2[[i]] + ggtitle(paste0('Age ', bl$labs[i]))
 }
 
-pdf('graphs/Revision/simResults.pdf')
-for(i in 1:6) print(plt[[i]])
-dev.off()
 pdf('graphs/Revision/simResultsMult.pdf')
 for(i in 1:6) print(plt2[[i]])
 dev.off()
 
 
-
-for (nm in names(results)){
-  plt <- ggplot(results[[nm]], aes(x = estimate)) + geom_histogram() +
-    # geom_vline(data = dplyr::filter(base, AGEGRP==nm),
-    #            aes(xintercept = estimate),
-    #            color = 'red') +
-    facet_wrap(~term, scales='free') +
-    theme_bw()
-}
-
-##%######################################################%##
-#                                                          #
-####                  Overall estimates                 ####
-#                                                          #
-##%######################################################%##
+# Plot overall meta-analytic estimates against naive estimates ------------
 
 ## We can pool the estimates  by using weighted averages of the age-stratum estimates
 ##
-
-simResults <- readRDS(file = path(dropdir,'Revision', 'simResults.rds'))
-
-
-N <- analytic %>% count(AGEGRP) %>% mutate(perc = n/sum(n))
-
-hrs <- simResults %>% map(select, estimate) %>% do.call(cbind, .) %>% as.matrix()
-overall <- hrs %*% N$perc
-overall_results <- tibble(term = simResults[[1]]$term, HR = overall[,1])
-overall_results <- overall_results %>%
-  mutate(term = fct_relevel(
-    factor(term),
-    'Black','Hispanic','Asian','Native American'
-  ))
-
-nominal_model_overall <-
-  coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=analytic_filt) %>%
-  broom::tidy() %>%
-  mutate(term = str_remove(term, 'RACE2'),
-         HR = exp(estimate)) %>%
-  select(term, HR) %>%
-  mutate(term = fct_relevel(
-    factor(term),
-    'Black','Hispanic','Asian','Native American'
-  ))
-
-
-ggplot(overall_results, aes(x = HR, y = ..count../sum(..count..))) + geom_histogram(bins=500) +
-  geom_segment(data = nominal_model_overall,
-               aes(x = HR, xend=HR, yend = 0, y = 0.03),
-               color='red', size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
-  facet_wrap(~term) +
-  labs(x = 'Hazard ratio for death or discontinuation
-       compared to Whites',
-       y = 'Relative frequency',
-       title = 'Overall estimates') +
-  theme(strip.text = element_text(face='bold'))
-ggsave('graphs/Revision/Overall_univariate.pdf')
-## Add nominal estimates
-
-nominal_model <- analytic_filt %>%
-  group_by(AGEGRP) %>%
-  group_modify(~broom::tidy(coxph(Surv(surv_time, cens_type %in% c(1,3))~RACE2, data=.)),
-               keep=T) %>%
-  mutate(term = str_remove(term, 'RACE2'),
-         HR = exp(estimate)) %>%
-  select(AGEGRP, term, HR) %>%
-  mutate(term = fct_relevel(
-    factor(term),
-    'Black', 'Hispanic','Asian','Native American'))
-
-pdf('graphs/Revision/AgeSpecificPlots.pdf')
-for (ag in names(simResults)){
-d <- simResults[[ag]] %>%
-  mutate(term = fct_relevel(factor(term),
-                            'Black','Hispanic','Asian','Native American'))
-
-plt <- ggplot() + geom_histogram(data=d, aes(x = estimate, y = ..count../sum(..count..)),
-                          bins = 50) +
-  geom_segment(data = nominal_model %>% filter(AGEGRP==ag),
-               aes(x = HR, xend=HR, yend = 0, y = 0.005),
-               color='red', size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
-  facet_wrap(~term, scales='free_x') +
-  labs(x = 'Hazard ratio for death or discontinuation
-       compared to Whites', y = '',
-       title = paste("Age group", ag))+
-  theme(
-    strip.text = element_text(face='bold')
-  )
-
-simResults_stacked <- bind_rows(simResults, .id='AGEGRP')
-simResults_stacked <- simResults_stacked %>%
-  mutate(AGEGRP = fct_relevel(AGEGRP, '[18,29]')) %>%
-  mutate(term = fct_relevel(term, 'Black','Hispanic','Asian'))
-nominal_model <- nominal_model %>%
-  mutate(estimate = HR)
-
-ggplot(simResults_stacked,
-       aes(x = estimate, color = term)) +
-  geom_density() +
-  geom_vline(xintercept = 1, linetype=2, color = 'red')+
-  geom_segment(data = nominal_model, aes(x = estimate, xend=estimate,
-                                         y = 5, yend = 0,
-                                         color=term),
-                size = 1.5, arrow = arrow(length = unit(.2, 'cm')))+
-  facet_grid(AGEGRP ~., scales='free_y', switch='y') +
-  scale_x_continuous('Hazard ratio', breaks = seq(0.4, 1.5, by=0.1))+
-  labs(y = '', color='Race')+
-  theme(strip.text = element_text(size = 14, face = 'bold'),
-        strip.text.y = element_text(angle = 180), # Rotate the y-axis labels
-        strip.background.y = element_rect(fill = 'white'),
-        # strip.placement = 'outside', # Move labels outside the borders
-        axis.text.y=element_blank(),
-        axis.ticks.y = element_blank())
-print(plt)
-}
-dev.off()
-
-
 
 # Multivariate models -----------------------------------------------------
 
@@ -262,7 +145,7 @@ overall_results2 <- overall_results2 %>%
 nominal_model_mult <- analytic_filt %>%
   group_by(AGEGRP) %>%
   group_modify(~broom::tidy(coxph(Surv(surv_time, cens_type %in% c(1,3))~
-                                    REGION + SEX + rcs(zscore) +
+                                    RACE2 + REGION + SEX + rcs(zscore) +
                                     ESRD_Cause +
                                     rcs(comorb_indx) +
                                     # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
@@ -271,7 +154,8 @@ nominal_model_mult <- analytic_filt %>%
                                     SEX:BMI2 + SEX:ESRD_Cause + SEX:REGION +
                                     SEX*rcs(comorb_indx), data=.)),
                keep=T) %>%
-  filter(str_detect(term, 'RACE2')) %>%
+  ungroup() %>%
+  filter(str_detect(term, 'RACE')) %>%
   mutate(term = str_remove(term, 'RACE2'),
          HR = exp(estimate)) %>%
   select(AGEGRP, term, HR) %>%
@@ -311,9 +195,7 @@ for (ag in names(simResults2)){
     labs(x = 'Hazard ratio for death or discontinuation
        compared to Whites', y = '',
          title = paste("Age group", ag))+
-    theme(
-      strip.text = element_text(face='bold')
-    )
+    theme(strip.text = element_text(face='bold'))
 
   simResults_stacked2 <- bind_rows(simResults2, .id='AGEGRP')
   simResults_stacked2 <- simResults_stacked2 %>%
