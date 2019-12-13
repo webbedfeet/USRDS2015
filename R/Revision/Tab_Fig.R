@@ -113,7 +113,7 @@ agegrp_label <- function(agegrp){
   bl <- agegrp %>% str_match_all('\\d+') %>%
     map(~as.numeric(t(.))) %>%
     do.call(rbind,.) %>%
-    as_tibble() %>%
+    as_tibble(.) %>%
     mutate(V1 = ifelse(V1 %% 10 == 9, V1+1, V1)) %>%
     unite(labs, c("V1",'V2'), sep = ' - ') %>%
     pull(labs)
@@ -285,3 +285,77 @@ for(i in 1:length(plots_tr)){
   print(plots_tr[[i]])
 }
 dev.off()
+
+
+# Survival curves for discontinuation, transplant and mortality by --------
+
+library(survival)
+library(survminer)
+
+s1 <- survfit(Surv(surv_time, cens_type==3) ~ AGEGRP, data=analytic_filt)
+s2 <- survfit(Surv(surv_time, cens_type==2) ~ AGEGRP, data=analytic_filt)
+s3 <- survfit(Surv(surv_time, cens_type==1) ~ AGEGRP, data=analytic_filt)
+t3 <- tidy(s3)
+
+discontinue_plot <- ggsurvplot(s1, data=analytic_filt, censor=F,
+                               fun='event',
+                               palette = rep(1,6),
+                               xlab = '', ylab = '',
+                               title = 'Discontinuation',
+                               legend='none',
+                               ylim = c(0,1))
+transplant_plot <- ggsurvplot(s2, data=analytic_filt, censor=F,
+                              fun='event',
+                              palette = rep(1,6),
+                              xlab = '', ylab = '', ylim = c(0,1),
+                              legend='none',
+                              title = 'Transplant')
+mortality_plot <- ggsurvplot(s3, data = analytic_filt, censor=F,
+                             xlab = '', ylab = '',
+                             palette = rep(1,6),
+                             legend='none',
+                             title = 'Death',
+                             legend.labs = agegrp_label(levels(analytic_filt$AGEGRP)))
+
+(Discontinue_plot <- discontinue_plot$plot +
+  facet_grid(strata~.)+
+  theme_bw()+
+  theme(legend.position = 'none',
+        strip.text = element_blank())
+)
+(Transplant_plot <- transplant_plot$plot +
+    facet_grid(strata~.)+
+    xlab('Time (years)')+
+    theme_bw() +
+    theme(strip.text = element_blank(),
+          legend.position = 'none',
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank())
+  )
+(Mortality_plot <- mortality_plot$plot +
+    facet_grid(strata~.)+
+    theme_bw() +
+    theme(strip.text.y = element_blank(),
+          strip.background.y = element_rect(fill='white'),
+          legend.position='none',
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank())
+)
+
+u <- tibble(x = rep(0.5,6), y = rep(0.5,6),
+            lab = agegrp_label(levels(analytic_filt$AGEGRP)))
+(blah <- ggplot(u, aes(x, y))+
+  geom_text(aes(label=lab), size = 5) +
+  facet_grid(lab~.) +
+  theme_classic()+
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_blank(),
+        axis.title = element_blank(),
+        axis.line = element_blank())+
+  ggtitle('Age'))
+
+
+library(cowplot)
+plot_grid(Discontinue_plot, Transplant_plot, Mortality_plot, blah,
+          nrow = 1, rel_widths = c(1.2,1,1,0.6), align='h')
