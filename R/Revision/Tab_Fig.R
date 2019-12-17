@@ -9,8 +9,8 @@
 # Setup -------------------------------------------------------------------
 
 abhiR::reload()
-dropdir <- here::here('data')
-# dropdir <- path("P:/Ward/USRDS2015/data")
+# dropdir <- here::here('data')
+dropdir <- path("P:/Ward/USRDS2015/data")
 # dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
 
 analytic <- read_fst(path(dropdir, 'Revision','AnalyticUpdated.fst'))
@@ -292,21 +292,23 @@ dev.off()
 library(survival)
 library(survminer)
 
-s1 <- survfit(Surv(surv_time, cens_type==3) ~ AGEGRP, data=analytic_filt)
-s2 <- survfit(Surv(surv_time, cens_type==2) ~ AGEGRP, data=analytic_filt)
-s3 <- survfit(Surv(surv_time, cens_type==1) ~ AGEGRP, data=analytic_filt)
-t3 <- tidy(s3)
+s1 <- survfit(Surv(surv_time, cens_type==3) ~ AGEGRP + RACE2, data=analytic_filt)
+s2 <- survfit(Surv(surv_time, cens_type==2) ~ AGEGRP + RACE2, data=analytic_filt)
+s3 <- survfit(Surv(surv_time, cens_type==1) ~ AGEGRP + RACE2, data=analytic_filt)
 
 discontinue_plot <- ggsurvplot(s1, data=analytic_filt, censor=F,
                                fun='event',
-                               palette = rep(1,6),
+                               color = 'RACE2',
+                               facet.by = 'AGEGRP',
+                               ncol=1,
+                               # palette = rep(1,6),
                                xlab = '', ylab = '',
                                title = 'Discontinuation',
-                               legend='none',
                                ylim = c(0,1))
 transplant_plot <- ggsurvplot(s2, data=analytic_filt, censor=F,
                               fun='event',
-                              palette = rep(1,6),
+                              color='RACE2',
+                              facet.by='AGEGRP',
                               xlab = '', ylab = '', ylim = c(0,1),
                               legend='none',
                               title = 'Transplant')
@@ -317,15 +319,28 @@ mortality_plot <- ggsurvplot(s3, data = analytic_filt, censor=F,
                              title = 'Death',
                              legend.labs = agegrp_label(levels(analytic_filt$AGEGRP)))
 
-(Discontinue_plot <- discontinue_plot$plot +
-  facet_grid(strata~.)+
-  theme_bw()+
-  theme(legend.position = 'none',
-        strip.text = element_blank())
-)
-(Transplant_plot <- transplant_plot$plot +
-    facet_grid(strata~.)+
+S1 <- discontinue_plot$data.survplot
+(Discontinue_plot <- ggplot(S1, aes(x = time, y = 1-surv, color = RACE2))+geom_line(size=1.2) +
+    facet_grid(AGEGRP~.) + ylim(0,1) +
     xlab('Time (years)')+
+    theme_bw() +
+  theme(strip.text = element_blank(), axis.title = element_blank(),
+        legend.position = 'none',
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  ggtitle('Discontinuation')
+)
+# (Discontinue_plot <- discontinue_plot$plot +
+#   facet_grid(strata~.)+
+#   theme_bw()+
+#   theme(legend.position = 'none',
+#         strip.text = element_blank())
+# )
+
+
+(Transplant_plot <- ggplot(transplant_plot$data.survplot, aes(x = time, y = 1-surv, color=RACE2)) +
+    geom_line(size=1.2)+
+    facet_grid(AGEGRP~.) + ylim(0,1) +
     theme_bw() +
     theme(strip.text = element_blank(),
           legend.position = 'none',
