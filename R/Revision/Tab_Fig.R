@@ -9,8 +9,8 @@
 # Setup -------------------------------------------------------------------
 
 abhiR::reload()
-# dropdir <- here::here('data')
-dropdir <- path("P:/Ward/USRDS2015/data")
+dropdir <- here::here('data')
+# dropdir <- path("P:/Ward/USRDS2015/data")
 # dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
 
 analytic <- read_fst(path(dropdir, 'Revision','AnalyticUpdated.fst'))
@@ -296,28 +296,51 @@ s1 <- survfit(Surv(surv_time, cens_type==3) ~ AGEGRP + RACE2, data=analytic_filt
 s2 <- survfit(Surv(surv_time, cens_type==2) ~ AGEGRP + RACE2, data=analytic_filt)
 s3 <- survfit(Surv(surv_time, cens_type==1) ~ AGEGRP + RACE2, data=analytic_filt)
 
-discontinue_plot <- ggsurvplot(s1, data=analytic_filt, censor=F,
-                               fun='event',
-                               color = 'RACE2',
-                               facet.by = 'AGEGRP',
-                               ncol=1,
-                               # palette = rep(1,6),
-                               xlab = '', ylab = '',
-                               title = 'Discontinuation',
-                               ylim = c(0,1))
-transplant_plot <- ggsurvplot(s2, data=analytic_filt, censor=F,
-                              fun='event',
-                              color='RACE2',
-                              facet.by='AGEGRP',
-                              xlab = '', ylab = '', ylim = c(0,1),
-                              legend='none',
-                              title = 'Transplant')
-mortality_plot <- ggsurvplot(s3, data = analytic_filt, censor=F,
-                             xlab = '', ylab = '',
-                             palette = rep(1,6),
-                             legend='none',
-                             title = 'Death',
-                             legend.labs = agegrp_label(levels(analytic_filt$AGEGRP)))
+process_surv <- function(survfit_obj){
+  d <- tidy(survfit_obj)  %>%
+    separate(strata, c("AGEGRP",'RACE2'), sep = '],') %>%
+    mutate(AGEGRP = str_squish(AGEGRP),
+           RACE2 = str_squish(RACE2),
+           AGEGRP = fct_relevel(factor(agegrp_label(AGEGRP)),'18 - 29'),
+           RACE2 = str_remove(RACE2, 'RACE2='),
+           RACE2 = fct_relevel(factor(RACE2), 'White', 'Black','Hispanic',
+                               'Asian', 'Native American'))
+  return(d)
+}
+
+d1 <- process_surv(s1)
+d2 <- process_surv(s2)
+d3 <- process_surv(s3)
+
+(discontinue_plot <- ggplot(d1, aes(x = time, y = 1-estimate, color = RACE2)) +
+  geom_line() +
+  facet_grid(AGEGRP~.) +
+  ylim(0,1) +
+  scale_x_continuous(breaks = seq(0,12,2)) +
+  theme_bw() +
+  theme(strip.text = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = 'none') +
+    labs(x = 'Time (years)')+
+  ggtitle('Discontinuation')
+)
+
+(transplant_plot <- ggplot(d2, aes(x = time, y = 1-estimate, color = RACE2))+
+    geom_line() +
+    facet_grid(AGEGRP ~ .) +
+    ylim(0,1) +
+    scale_x_continuous(breaks = seq(0,12,2))+
+    theme_bw() +
+    theme(strip.text = element_blank(),
+          axis.title.x = element_blank(),
+          # axis.text.y = element_blank(),
+          # axis.ticks.y = element_blank(),
+          legend.position = 'none') +
+    labs(y = 'Probability')+
+    ggtitle('Transplant')
+)
 
 S1 <- discontinue_plot$data.survplot
 (Discontinue_plot <- ggplot(S1, aes(x = time, y = 1-surv, color = RACE2))+geom_line(size=1.2) +
@@ -330,13 +353,6 @@ S1 <- discontinue_plot$data.survplot
         axis.ticks.y = element_blank()) +
   ggtitle('Discontinuation')
 )
-# (Discontinue_plot <- discontinue_plot$plot +
-#   facet_grid(strata~.)+
-#   theme_bw()+
-#   theme(legend.position = 'none',
-#         strip.text = element_blank())
-# )
-
 
 (Transplant_plot <- ggplot(transplant_plot$data.survplot, aes(x = time, y = 1-surv, color=RACE2)) +
     geom_line(size=1.2)+
