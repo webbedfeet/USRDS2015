@@ -341,37 +341,22 @@ d3 <- process_surv(s3)
     labs(y = 'Probability')+
     ggtitle('Transplant')
 )
-
-S1 <- discontinue_plot$data.survplot
-(Discontinue_plot <- ggplot(S1, aes(x = time, y = 1-surv, color = RACE2))+geom_line(size=1.2) +
-    facet_grid(AGEGRP~.) + ylim(0,1) +
-    xlab('Time (years)')+
-    theme_bw() +
-  theme(strip.text = element_blank(), axis.title = element_blank(),
-        legend.position = 'none',
-        axis.text.y = element_blank(),
-        axis.ticks.y = element_blank()) +
-  ggtitle('Discontinuation')
-)
-
-(Transplant_plot <- ggplot(transplant_plot$data.survplot, aes(x = time, y = 1-surv, color=RACE2)) +
-    geom_line(size=1.2)+
-    facet_grid(AGEGRP~.) + ylim(0,1) +
+(mortality_plot <- ggplot(d3, aes(x = time, y = estimate, color = RACE2)) +
+    geom_line() +
+    facet_grid(AGEGRP ~ .) +
+    ylim(0,1) +
+    scale_x_continuous(breaks = seq(0,12,2)) +
     theme_bw() +
     theme(strip.text = element_blank(),
-          legend.position = 'none',
+          axis.title = element_blank(),
           axis.text.y = element_blank(),
-          axis.ticks.y = element_blank())
-  )
-(Mortality_plot <- mortality_plot$plot +
-    facet_grid(strata~.)+
-    theme_bw() +
-    theme(strip.text.y = element_blank(),
-          strip.background.y = element_rect(fill='white'),
-          legend.position='none',
-          axis.text.y = element_blank(),
-          axis.ticks.y = element_blank())
+          axis.ticks.y = element_blank())+
+    labs(color = 'Race') +
+    ggtitle('Mortality')
 )
+
+leg <- get_legend(mortality_plot + guides(color = guide_legend(nrow=1)) +
+                    theme(legend.position = 'bottom'))
 
 u <- tibble(x = rep(0.5,6), y = rep(0.5,6),
             lab = agegrp_label(levels(analytic_filt$AGEGRP)))
@@ -388,5 +373,6 @@ u <- tibble(x = rep(0.5,6), y = rep(0.5,6),
 
 
 library(cowplot)
-plot_grid(Discontinue_plot, Transplant_plot, Mortality_plot, blah,
+P1 <- plot_grid(transplant_plot, discontinue_plot, mortality_plot + theme(legend.position='none'), blah,
           nrow = 1, rel_widths = c(1.2,1,1,0.6), align='h')
+plot_grid(P1, leg, ncol=1, rel_heights = c(1,.1))
