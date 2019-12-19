@@ -1,3 +1,4 @@
+
 date_midpt <- function(dt1, dt2) {
   # check that dt1 <= dt2
   if (any (dt1 >  dt2, na.rm=T)){

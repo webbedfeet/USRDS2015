@@ -8,6 +8,8 @@ dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
 analytic_data <- read_fst(path(dropdir,'Analytic.fst'))
 
 dbdir <- verifyPaths()
+# sql_conn <- dbConnect(SQLite(), file.path(dbdir, 'USRDS.sqlite3'))
+
 ## Following paths are for MBP
 sql_conn <- dbConnect(SQLite(), file.path('data','raw','USRDS.sqlite3'))
 
@@ -37,6 +39,7 @@ analytic_data <- analytic_data %>%
   ))
 
 
+
 # Adding DISGRPC codes to analytic data --------------------------------------------
 
 disgrpc_code <- readRDS(path(dropdir, 'disgrpc_code.rds')) # See cause_esrd.R
@@ -56,22 +59,25 @@ analytic_data <- analytic_data %>% left_join(disgrpc) # Adding reason for dialys
 medevid <- studyids %>% left_join(tbl(sql_conn, 'medevid')) %>% 
   select(USRDS_ID, ALBUM, ALBUMDT, ALBUMLM,ALCOH, DRUG) %>% 
   collect(n = Inf) %>% 
-  mutate_at(vars(ALCOH, DRUG), ~ifelse(. == '', NA, .))
+  mutate_at(vars(ALCOH, DRUG), ~ifelse(. == '', NA, .)) %>% distinct()
 medevid1 <- medevid %>% left_join(analytic_data %>% select(USRDS_ID, FIRST_SE)) %>% 
   filter_at(vars(ALCOH:DRUG), ~!is.na(.)) %>% 
   mutate(ALBUMDT = as.Date(ALBUMDT),
          time_from_se = abs(FIRST_SE - ALBUMDT))
 bl <- filter(medevid1, !is.na(ALBUM))
-bl %>% count(USRDS_ID) %>% filter(n > 1) %>% left_join(bl) -> bl2
+bl %>% count(USRDS_ID) %>% filter(n > 1) %>% left_join(bl) -> bl2 # Individuals with more than one record
 bl2 %>% 
-  mutate_at(vars(ALCOH, DRUG), ~ifelse(.=='Y', 1, 0)) %>% 
+  mutate_at(vars(ALCOH, DRUG), ~ifelse(.=='Y', 1, 0)) %>% # Transform to numeric
   group_by(USRDS_ID) %>% 
-  filter(time_from_se == min(time_from_se, na.rm=T)) %>% 
-  mutate(ALBUM = mean(ALBUM, na.rm=T)) %>%
-  mutate_at(vars(ALCOH, DRUG), ~max(., na.rm=T)) %>% 
+  filter(time_from_se == min(time_from_se, na.rm=T)) %>% # Keep the earliest record
+  mutate(ALBUM = mean(ALBUM, na.rm=T)) %>% # If you had repeats, average Albumin
+  mutate_at(vars(ALCOH, DRUG), ~max(., na.rm=T)) %>% # take max of alcohol and drug
   ungroup() %>% 
   select(-ALBUMLM, -ALBUMDT) %>%
-  distinct() -> bl3
+  distinct() %>% 
+  assertr::verify(nrow(.)==length(unique(USRDS_ID))) -> bl3
+
+
 medevid1 <- medevid1 %>% 
   count(USRDS_ID) %>% 
   filter(n==1) %>% 
