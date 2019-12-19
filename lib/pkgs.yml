@@ -15,12 +15,9 @@
 - openxlsx
 - glue
 - tableone
-- impute-bioC
 - DBI
 - stringr
 - RSQLite
-- cowplot
-- cmprsk
 - rmarkdown
-- haven
+- impute-bioC
 

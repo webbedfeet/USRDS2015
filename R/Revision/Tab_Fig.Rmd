@@ -1,0 +1,133 @@
+---
+title: "Table One"
+author: "Abhijit Dasgupta"
+output: 
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=F}
+knitr::opts_chunk$set(echo = F, warning=F, message=F, cache=F)
+library(fst)
+library(fs)
+library(glue)
+library(here)
+library(tidyverse)
+library(janitor)
+library(tableone)
+library(labelled)
+# dropdir <- path("P:/Ward/USRDS2015/data")
+dropdir = here('data')
+# dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
+
+analytic <- read_fst(path(dropdir, 'Revision','AnalyticUpdated.fst'))
+
+analytic_filt <- analytic %>%
+  mutate(RACE2 = factor(RACE2)) %>%
+  mutate(RACE2 = fct_relevel(RACE2, 'White','Black','Asian','Native American','Hispanic')) %>%
+  filter(RACE2 != 'Other') %>% # Removes 2371 with Other and 11131 with missing RACE2 (N=1,277,499)
+  mutate(RACE2 = fct_drop(RACE2, 'Other'))
+
+
+analytic_filt <- analytic_filt %>%
+  mutate(SEX = ifelse(SEX=='1', 'Male','Female')) %>%
+  mutate_at(vars(DIABETES, Cancer,Cardia, Cva, Ihd, Pulmon, Pvasc), as.factor) %>%
+  mutate(Smoke = ifelse(Smoke=='N','No','Yes')) %>% 
+  mutate(ALCOH = ifelse(ALCOH==1, 'Yes','No'),
+         DRUG = ifelse(DRUG==1, 'Yes','No')) %>% 
+  mutate(Discontinued = ifelse(cens_type==3, 'Yes','No'),
+         Transplant = ifelse(cens_type==2, 'Yes','No')) %>% 
+  set_variable_labels(DIABETES = 'Diabetes',
+                      SEX = 'Gender',
+                      INC_AGE = 'Age',
+                      zscore = 'Socio-economic score',
+                      REGION = 'Region',
+                      ESRD_Cause = 'Cause of ESRD',
+                      comorb_indx = 'Comorbidity index',
+                      ALCOH = "Alcohol use",
+                      DRUG = "Drug use",
+                      BMI2 = 'Body Mass Index',
+                      Smoke = 'Smoking status') %>%
+  set_value_labels(ESRD_Cause = c('Glomeruloneph.' = 'Glomerulonephritis'))
+
+
+# Table 1 -----------------------------------------------------------------
+
+library(tableone)
+
+variables <- c('Discontinued','Transplant','REGION','SEX','ESRD_Cause','zscore','comorb_indx',
+               'BMI2','Smoke','ALCOH','DRUG')
+
+analytic_filt_byage <- split(analytic_filt, analytic_filt$AGEGRP)
+analytic_filt_byage <- map(analytic_filt_byage, 
+                           set_variable_labels, DIABETES = 'Diabetes',
+                      SEX = 'Gender',
+                      INC_AGE = 'Age',
+                      zscore = 'Socio-economic score',
+                      REGION = 'Region',
+                      ESRD_Cause = 'Cause of ESRD',
+                      comorb_indx = 'Comorbidity index',
+                      ALCOH = "Alcohol use",
+                      DRUG = "Drug use",
+                      BMI2 = 'Body Mass Index',
+                      Smoke = 'Smoking status')
+
+tabs <- map(analytic_filt_byage, ~CreateTableOne(data=., vars=variables, 
+                                                 strata='RACE2',
+                                                 test=F))
+```
+
+### Ages 18-29
+
+```{r}
+ages <- names(tabs)[1]
+  age_interval = paste(str_match_all(ages, '\\d+')[[1]], collapse=' - ')
+  kableone(print(tabs[[ages]], test = F, varLabels=T, format='fp', showAllLevels=F))
+
+```
+
+
+### Ages 30-39
+
+```{r}
+ages <- names(tabs)[2]
+  age_interval = paste(str_match_all(ages, '\\d+')[[1]], collapse=' - ')
+  kableone(print(tabs[[ages]], test = F, varLabels=T, format='fp', showAllLevels=F))
+
+```
+
+### Ages 40-49
+
+```{r}
+ages <- names(tabs)[3]
+  age_interval = paste(str_match_all(ages, '\\d+')[[1]], collapse=' - ')
+  kableone(print(tabs[[ages]], test = F, varLabels=T, format='fp', showAllLevels=F))
+
+```
+
+### Ages 50-59
+
+```{r}
+ages <- names(tabs)[4]
+  age_interval = paste(str_match_all(ages, '\\d+')[[1]], collapse=' - ')
+  kableone(print(tabs[[ages]], test = F, varLabels=T, format='fp', showAllLevels=F))
+
+```
+
+### Ages 60-69
+
+```{r}
+ages <- names(tabs)[5]
+  age_interval = paste(str_match_all(ages, '\\d+')[[1]], collapse=' - ')
+  kableone(print(tabs[[ages]], test = F, varLabels=T, format='fp', showAllLevels=F))
+
+```
+
+### Ages 70-100
+
+```{r}
+ages <- names(tabs)[6]
+  age_interval = paste(str_match_all(ages, '\\d+')[[1]], collapse=' - ')
+  kableone(print(tabs[[ages]], test = F, varLabels=T, format='fp', showAllLevels=F))
+
+```
