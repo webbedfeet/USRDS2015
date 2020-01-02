@@ -17,7 +17,8 @@ analytic <- read_fst(path(dropdir, 'Revision','AnalyticUpdated.fst'))
 
 analytic_filt <- analytic %>%
   mutate(RACE2 = factor(RACE2)) %>%
-  mutate(RACE2 = fct_relevel(RACE2, 'White','Black','Asian','Native American','Hispanic')) %>%
+  mutate(RACE2 = recode_factor(RACE2, 'Native American' = 'AI/AN')) %>%
+  mutate(RACE2 = fct_relevel(RACE2, 'White','Black','Hispanic','Asian','AI/AN')) %>%
   filter(RACE2 != 'Other') %>% # Removes 2371 with Other and 11131 with missing RACE2 (N=1,277,499)
   mutate(RACE2 = fct_drop(RACE2, 'Other'))
 
@@ -304,7 +305,7 @@ process_surv <- function(survfit_obj){
            AGEGRP = fct_relevel(factor(agegrp_label(AGEGRP)),'18 - 29'),
            RACE2 = str_remove(RACE2, 'RACE2='),
            RACE2 = fct_relevel(factor(RACE2), 'White', 'Black','Hispanic',
-                               'Asian', 'Native American'))
+                               'Asian', 'AI/AN'))
   return(d)
 }
 
@@ -317,14 +318,16 @@ d3 <- process_surv(s3)
   facet_grid(AGEGRP~.) +
   ylim(0,1) +
   scale_x_continuous(breaks = seq(0,12,2)) +
+  ggtitle('Discontinuation')+
+    coord_cartesian(xlim = c(0,6))+
   theme_bw() +
   theme(strip.text = element_blank(),
         axis.title.y = element_blank(),
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
-        legend.position = 'none') +
-    labs(x = 'Time (years)')+
-  ggtitle('Discontinuation')
+        legend.position = 'none',
+        plot.title=element_text(hjust = 0.5)) +
+    labs(x = 'Time (years)')
 )
 
 (transplant_plot <- ggplot(d2, aes(x = time, y = 1-estimate, color = RACE2))+
@@ -332,27 +335,31 @@ d3 <- process_surv(s3)
     facet_grid(AGEGRP ~ .) +
     ylim(0,1) +
     scale_x_continuous(breaks = seq(0,12,2))+
+    coord_cartesian(xlim = c(0,6))+
+    ggtitle('Transplant')+
     theme_bw() +
     theme(strip.text = element_blank(),
           axis.title.x = element_blank(),
           # axis.text.y = element_blank(),
           # axis.ticks.y = element_blank(),
-          legend.position = 'none') +
-    labs(y = 'Probability')+
-    ggtitle('Transplant')
+          legend.position = 'none',
+          plot.title = element_text(hjust=0.5)) +
+    labs(y = 'Probability')
 )
 (mortality_plot <- ggplot(d3, aes(x = time, y = estimate, color = RACE2)) +
     geom_line() +
     facet_grid(AGEGRP ~ .) +
     ylim(0,1) +
     scale_x_continuous(breaks = seq(0,12,2)) +
+    coord_cartesian(xlim = c(0,6))+
+    ggtitle('Mortality')+
     theme_bw() +
     theme(strip.text = element_blank(),
           axis.title = element_blank(),
           axis.text.y = element_blank(),
-          axis.ticks.y = element_blank())+
-    labs(color = 'Race') +
-    ggtitle('Mortality')
+          axis.ticks.y = element_blank(),
+          plot.title=element_text(hjust=0.5))+
+    labs(color = '')
 )
 
 leg <- get_legend(mortality_plot + guides(color = guide_legend(nrow=1)) +
@@ -363,13 +370,15 @@ u <- tibble(x = rep(0.5,6), y = rep(0.5,6),
 (blah <- ggplot(u, aes(x, y))+
   geom_text(aes(label=lab), size = 5) +
   facet_grid(lab~.) +
+  ggtitle('Age')+
   theme_classic()+
   theme(axis.text = element_blank(),
         axis.ticks = element_blank(),
         strip.text = element_blank(),
         axis.title = element_blank(),
-        axis.line = element_blank())+
-  ggtitle('Age'))
+        axis.line = element_blank(),
+        plot.title = element_text(hjust=0.5))
+)
 
 
 library(cowplot)
