@@ -40,6 +40,7 @@ analytic_data <- analytic_data %>%
   mutate(REGION = as.factor(REGION))
 
 
+
 # Adding DISGRPC codes to analytic data --------------------------------------------
 
 disgrpc_code <- readRDS(path(dropdir, 'disgrpc_code.rds')) # See cause_esrd.R
@@ -340,4 +341,3 @@ assertthat::are_equal(sum(analytic_dt$RACE2!='White', na.rm=T), nrow(analytic_re
 
 write_fst(analytic_rest, 'data/Revision/Analytic_Rest.fst')
 # write_fst(analytic_rest, path(dropdir, 'Revision','Analytic_Rest.fst'))
-
