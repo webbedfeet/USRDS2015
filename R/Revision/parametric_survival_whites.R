@@ -9,15 +9,12 @@ abhiR::reload()
 
 dropdir <- 'P:/Ward/USRDS2015/data'
 if(!dir_exists(dropdir)) dropdir <- 'data'
-analytic_whites <- read_fst(path(dropdir, 'Revision', 'Analytic_Whites.fst')) %>%
-  mutate(REGION = factor(REGION))
+analytic_whites <- read_fst(path(dropdir, 'Revision', 'Analytic_Whites2.fst'))
 analytic_whites_byagegrp <- split(analytic_whites, analytic_whites$AGEGRP)
 
 
 # Modeling ----------------------------------------------------------------
 
-# TODO: Update this with comorbidity index from AnalyticUpdated.fst
-# The current method misses liver disease and GI bleeding
 # model_template <- function(dat, dist = 'weibull'){
 #   require(rms)
 #   m1 <- survreg(Surv(surv_time + 0.01, cens_type==3) ~
