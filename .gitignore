@@ -15,3 +15,10 @@ data/*
 *.Rproj
 R/**/*cache/*
 graphs/*
+*~
+*.swp
+R/Revision/biowulf/data/*
+R/Revision/biowulf/R/*
+R/Revision/biowulf/lib/*
+R/Revision/biowulf/output/*
+
