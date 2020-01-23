@@ -25,7 +25,10 @@
 #'
 #' We will then update the analytic dataset with these new estimated times of
 #' death for use in the simulation models in `simuation.R`. The new analytic
-#' dataset will be stored in `data/Revision/AnalyticUpdated2.fst`.
+#' dataset will be stored in `data/Revision/AnalyticUpdated2.fst`, and
+#' the white and rest subsets in `data/Revision/Analytic_Whites2.fst` and `data/Revision/Analytic_Rest2.fst`.
+#' This will be the new inputs for the parametric survival models for whites (won't change anything) and the
+#' simulation study.
 #'
 #'
 #+ preamble, include = F
@@ -131,11 +134,11 @@ plot_disc_weib <- map(cs_weibull, plot_cs)
 plot_disc_ln <- map(cs_lognormal, plot_cs)
 plot_disc_ll <- map(cs_loglogistic, plot_cs)
 
-pdf('graphs/Revision/CSExplore_transplant_mortality.pdf')
-for(i in 1:6){
-  print(cowplot::plot_grid(plot_disc_weib[[i]], plot_disc_ln[[i]],plot_disc_ll[[i]], nrow=2))
-}
-dev.off()
+# pdf('graphs/Revision/CSExplore_transplant_mortality.pdf')
+# for(i in 1:6){
+#   print(cowplot::plot_grid(plot_disc_weib[[i]], plot_disc_ln[[i]],plot_disc_ll[[i]], nrow=2))
+# }
+# dev.off()
 
 #' We will use a log-normal model for all of the age strata, based on both c-index and
 #' Cox-Snell residuals
@@ -144,16 +147,35 @@ dev.off()
 # Prediction and imputation -----------------------------------------------
 
 tod_new <- map2(lognormal_models, analytic_data_tr_age, ~Mean(.x)(predict(.x, .y, type='lp')))
+assertthat::are_equal(sum(map_dbl(tod_new, length), na.rm=T), nrow(analytic_data_tr))
 
-map2(tod_new, analytic_data_tr_age, ~mean(.x[.y$cens_type==2]<.y$tot[.y$cens_type==2], na.rm=T))
+# map2(tod_new, analytic_data_tr_age, ~mean(.x[.y$cens_type==2]<.y$tot[.y$cens_type==2], na.rm=T))
 
 bl=map2(analytic_data_tr_age, tod_new, ~cbind(.x, 'tod_new'=.y)) %>% bind_rows()
+assertthat::are_equal(nrow(bl), nrow(analytic_data_tr))
+
 bl <- bl %>%
   filter(cens_type==2) %>%
   mutate(tod = ifelse(tot <= tod_new, tod_new, NA))
+assertthat::are_equal(nrow(bl), sum(analytic_data_tr$cens_type==2, na.rm=T))
 
 test_analytic <- analytic_data
 ind <- match(bl$USRDS_ID, test_analytic$USRDS_ID)
 test_analytic$tod[ind] <- bl$tod
 
+test_analytic <- test_analytic %>%
+  filter(RACE2 != 'Other', !is.na(RACE2)) %>%
+  mutate(RACE2 = as.factor(RACE2)) %>%
+  mutate(RACE2 = recode_factor(RACE2,   'Native American' = 'AI/AN')) %>%
+  mutate(RACE2 = fct_relevel(RACE2, 'White','Black','Hispanic','Asian', 'AI/AN'))
+
 fst::write_fst(test_analytic, 'data/Revision/AnalyticUpdated2.fst')
+
+test_analytic_white <- test_analytic %>% filter(RACE2=='White')
+test_analytic_rest <- test_analytic %>% filter(RACE2 != 'White')
+
+assertthat::are_equal(sum(analytic_data$RACE2=='White', na.rm=T), nrow(test_analytic_white))
+assertthat::are_equal(sum(analytic_data$RACE2 %in% c('Black','Hispanic','Asian','Native American'), na.rm=T), nrow(test_analytic_rest))
+
+fst::write_fst(test_analytic_white, 'data/Revision/Analytic_Whites2.fst')
+fst::write_fst(test_analytic_rest, 'data/Revision/Analytic_Rest2.fst')
