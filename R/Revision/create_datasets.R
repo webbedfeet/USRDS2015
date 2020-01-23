@@ -6,7 +6,7 @@ abhiR::reload()
 
 # dropdir <- path(find_dropbox(), 'NIAMS','Ward','USRDS2015','data')
 dropdir <- "P:/Ward/USRDS2015/data"
-dir_exists(dropdir)
+if(!dir_exists(dropdir)) dropdir = 'data'
 analytic_data <- read_fst(path(dropdir,'Analytic.fst'))
 
 # dbdir <- verifyPaths()
@@ -322,7 +322,7 @@ analytic_dt[, (cmbs) := lapply(.SD, transform_fn), .SDcols = cmbs]
 analytic_dt[, comorb_indx := Ihd + 3 * Cardia +
               2 * (Cva + Pvasc + COMO_OTHCARD + Pulmon + GI + Liver + DYSRHYT + Cancer) +
               DIABETES]
-write_fst(analytic_dt, 'data/Revision/AnalyticUpdated.fst')
+write_fst(analytic_dt, path(dropdir,'Revision','AnalyticUpdated.fst'))
 # write_fst(analytic_dt, path(dropdir,'Revision','AnalyticUpdated.fst'))
 
 # Create white subset -----------------------------------------------------
