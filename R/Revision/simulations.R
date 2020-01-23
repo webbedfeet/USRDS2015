@@ -15,29 +15,27 @@ abhiR::reload()
 dropdir <- 'P:/Ward/USRDS2015/data'
 if(!dir_exists(dropdir)) dropdir <- 'data'
 
-analytic_whites <- read_fst(path(dropdir,'Revision', 'Analytic_Whites.fst')) %>%
-  mutate(REGION = factor(REGION))
+analytic_whites <- read_fst(path(dropdir,'Revision', 'Analytic_Whites2.fst'))
 analytic_whites_byagegrp <- split(analytic_whites, analytic_whites$AGEGRP)
-analytic_rest <- read_fst(path(dropdir, 'Revision','Analytic_Rest.fst')) %>%
-  mutate(REGION = factor(REGION))
+analytic_rest <- read_fst(path(dropdir, 'Revision','Analytic_Rest2.fst'))
 analytic_rest_byagegrp <- split(analytic_rest, analytic_rest$AGEGRP)
-analytic <- read_fst(path(dropdir, 'Revision', "AnalyticUpdated.fst"))
+analytic <- read_fst(path(dropdir, 'Revision', "AnalyticUpdated2.fst"))
 
-analytic_filt <- analytic %>%
-  mutate(RACE2 = factor(RACE2)) %>%
-  mutate(RACE2 = fct_relevel(RACE2, 'White')) %>%
-  filter(RACE2 != 'Other') %>%
-  mutate(RACE2 = fct_drop(RACE2, 'Other'))
+assertthat::are_equal(nrow(analytic_whites)+nrow(analytic_rest), nrow(analytic))
 
+# This section was taken care of in updated_transplant_mortality.R
+# analytic_filt <- analytic %>%
+#   mutate(RACE2 = factor(RACE2)) %>%
+#   mutate(RACE2 = fct_relevel(RACE2, 'White')) %>%
+#   filter(RACE2 != 'Other') %>%
+#   mutate(RACE2 = fct_drop(RACE2, 'Other'))
+#
 load(path(dropdir, 'Revision','whites_models_final.rda'))
 
 library(foreach)
 library(parallel)
 library(doParallel)
 no_cores <- detectCores()-1
-
-
-
 
 # Generate linear predictors ----------------------------------------------
 
