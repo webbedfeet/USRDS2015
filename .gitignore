@@ -21,4 +21,7 @@ R/Revision/biowulf/data/*
 R/Revision/biowulf/R/*
 R/Revision/biowulf/lib/*
 R/Revision/biowulf/output/*
+R/Revision/biowulf/R_local/*
+R/Revision/local/*
+R/Revision/local/output/*
 
