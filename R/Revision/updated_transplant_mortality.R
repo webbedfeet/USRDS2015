@@ -93,9 +93,9 @@ model_template_rms <- function(dat, dist = 'weibull'){
   return(m1)
 }
 
-cindex.cens <- function(mod, dat, type=c('time','hazard')){
+cindex.cens <- function(mod, dat, outcome=2, type=c('time','hazard')){
   require(rms)
-  dxy = dxy.cens(predict(mod), Surv(dat$surv_time+0.01, dat$cens_type==2), type=type)
+  dxy = dxy.cens(predict(mod), Surv(dat$surv_time+0.01, dat$cens_type==outcome), type=type)
   out = 0.5*(dxy['Dxy'] + 1)
   return(out)
 }
