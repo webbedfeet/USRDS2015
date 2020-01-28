@@ -28,7 +28,7 @@ j <- {iter_no}
 data_path <- here('R/Revision/biowulf/data')
 output_path <- here('R/Revision/local/output')
 # load(as.character(glue('/data/dasgupab/USRDS2015/data/biowulf/white_models_final{{i}}.rda')))
-load(file.path(data_path,'white_models_final{{i}}.rda')) # white models for discontinuation and transplant
+load(file.path(data_path,as.character(glue('white_models_final{{i}}.rda')))) # white models for discontinuation and transplant
 
 white_data <- fst::read_fst(file.path(data_path, as.character(glue('whites{{i}}.fst'))))
 rest_data <- fst::read_fst(file.path(data_path, as.character(glue('rest{{i}}.fst'))))
@@ -83,18 +83,18 @@ dat <- cbind(dat, R) %>%
                                   new_surv_time + 7/365.25,
                                   new_surv_time)) %>%
     bind_rows(whites_reduced)
-
-mod1 <- coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~
-              RACE2 + REGION + SEX + rcs(zscore) +
-              ESRD_Cause +
-              rcs(comorb_indx) +
-              # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
-              DIABETES + ALCOH + DRUG + BMI2 +
-              SEX:DIABETES + SEX:ALCOH + SEX:DRUG +
-              SEX:BMI2 + SEX:ESRD_Cause + SEX:REGION +
-              SEX*rcs(comorb_indx),
-              data = dat, y=F)
-
+#
+# mod1 <- coxph(Surv(new_surv_time, new_cens_type %in% c(1,3))~
+#               RACE2 + REGION + SEX + rcs(zscore) +
+#               ESRD_Cause +
+#               rcs(comorb_indx) +
+#               # Cancer + Cardia + Cva + Hyper + Ihd + Pulmon + Pvasc + Smoke +
+#               DIABETES + ALCOH + DRUG + BMI2 +
+#               SEX:DIABETES + SEX:ALCOH + SEX:DRUG +
+#               SEX:BMI2 + SEX:ESRD_Cause + SEX:REGION +
+#               SEX*rcs(comorb_indx),
+#               data = dat, y=F)
+#
 # saveRDS(mod1, file.path(output_path, as.character(glue('model{{i}}_{{j}}.rds'))), compress=T)
-write_fst(dat, path(output_path, as.character(glue('simdata{{i}}_{{j}}.fst'))))
+# write_fst(dat, path(output_path, as.character(glue('simdata{{i}}_{{j}}.fst'))))
 
