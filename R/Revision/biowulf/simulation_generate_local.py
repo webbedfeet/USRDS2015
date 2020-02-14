@@ -1,10 +1,14 @@
 #!/usr/bin/python
 import numpy as np
+import pandas as pd
+import os
+if not os.path.exists('R_local'):
+  os.makedirs('R_local')
 
 nsim = 1000
 
-np.random.RandomState(seed=20485)
-seeds = np.random.randint(1, 100000, size = nsim)
+seeds = np.array(pd.read_csv('seeds.csv'))
+
 
 with open('simulation_template_local.R','r') as f:
   template = f.readlines()
