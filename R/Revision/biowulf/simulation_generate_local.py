@@ -7,7 +7,7 @@ if not os.path.exists('R_local'):
 
 nsim = 1000
 
-seeds = np.array(pd.read_csv('seeds.csv'))
+seeds = np.array(pd.read_csv('seeds.txt')).ravel()
 
 
 with open('simulation_template_local.R','r') as f:
